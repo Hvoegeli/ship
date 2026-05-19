@@ -145,11 +145,11 @@
 <h2>5 — Test Coverage &amp; Quality <span class="pill">measured</span></h2>
 <p class="how">Unit run 3× for flakiness; E2E static catalog; coverage attempted. → <code>docs/audit/raw/cat5-before.txt</code></p>
 <table>
-<tr><td class="m">Total tests</td><td><b>451 unit</b> (api, 28 files) + <b>~882 E2E</b> across 71 spec files (static count)</td></tr>
-<tr><td class="m">Pass / Fail / Flaky</td><td><b>unit: 451 / 0 / 0</b> (3 runs identical — stable). <b>E2E: not obtainable</b></td></tr>
+<tr><td class="m">Total tests</td><td><b>451 unit (api)</b> + <b>151 unit (web)</b> + <b>~882 E2E</b> = ~1,484 total (vs README "73+")</td></tr>
+<tr><td class="m">Pass / Fail / Flaky</td><td><b>api: 451 / 0 / 0</b> on fresh seed; <b>8 fail on the locked snapshot</b> (test-isolation defect). <b>web: 138 / 13 / —</b> (TipTap/ProseMirror, hidden by default <code>pnpm test</code>). E2E: not obtainable.</td></tr>
 <tr><td class="m">Suite runtime</td><td>unit: ~15–16 s (16/15/16). E2E: not obtainable</td></tr>
 <tr><td class="m">Critical flows with zero coverage</td><td>document CRUD via HTTP, auth, real-time Yjs collaboration; 16 web unit files never run by <code>pnpm test</code></td></tr>
-<tr><td class="m">Code coverage % (if measured)</td><td>web: <b>n/a</b> (no coverage config) / api: <b>n/a</b> (<code>@vitest/coverage-v8</code> not installed) — <b>unmeasurable as-shipped</b></td></tr>
+<tr><td class="m">Code coverage % (if measured)</td><td><b>api Lines 40.52%</b> · Stmts 40.34% · Funcs 40.9% · Branches 33.44%. <b>web Lines 28.53%</b> · Stmts 27.63% · Funcs 25.6% · Branches 19.38%. Configured per PRD instruction (#3b: added <code>@vitest/coverage-v8@4.0.17</code>; absent as-shipped — finding kept).</td></tr>
 </table>
 <ol>
 <li><span class="sev hi">High</span> — mandated <code>/e2e-test-runner</code> skill <b>does not exist</b>; 882-test suite unrunnable by sanctioned method.</li>

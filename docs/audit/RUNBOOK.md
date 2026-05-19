@@ -74,7 +74,7 @@ Status: ✅ decided & applied · 🔵 decided, pending work · ❓ OPEN (needs u
 | Unilateral call (corrected) | Cat 6 dropped 2 PRD methods silently | me (error) | user flagged; plan hid the omission | ✅ superseded by #4b |
 | #1 condition-of-record | snapshot/restore exact dataset **(b)** | user → (b) | base seed not idempotent; pinning makes the Phase-1 "reproducible" claim literally true | ✅ snapshot committed + `db-restore.sh` validated |
 | #2b Cat 7 Lighthouse | run Lighthouse for real, not axe-only | user → (b) | PRD deliverable literally asks for it | ✅ `8419aa7` |
-| #3b Cat 5 coverage | configure `@vitest/coverage-v8` + web coverage now, report % | user → (b) | PRD: "if not configured, configure it" | 🔵 in progress |
+| #3b Cat 5 coverage | configure `@vitest/coverage-v8`@4.0.17 in api+web; add web `test:coverage` script | user → (b) | PRD: "if not configured, configure it" | ✅ api 40.52% lines / web 28.53% lines. Surfaced two NEW findings via #3b: (1) api tests not isolated from pre-state (8 fail on snapshot vs 0 on fresh seed); (2) web has 13/151 failing tests hidden by default `pnpm test`. |
 | #4b Cat 6 probes | add stored-XSS + concurrent-edit probes | user → (b) | PRD "How to Measure" items | ✅ this commit |
 | #5 timeline | Audit due **Wednesday noon**; early Fri; final Sun | user | the two brief PDFs disagreed; user resolved | ✅ recorded |
 | LH-guide Q1 | Lighthouse: 3 runs/page → **median**; persist JSON+HTML to `reports/a11y/<phase>/` | user → recommended | ShipShape Lighthouse guide mandates it; we'd observed variance (main_docs 100/91/91) | ✅ applied |
@@ -105,6 +105,6 @@ f1788b4  add per-category improvement options to findings-summary
 ## 6. Open items
 
 - ✅ **Decision #1b** — DONE: dataset pinned (`scripts/audit/snapshot/ship_dev.condition.dump`), `db-restore.sh` validated.
-- 🔵 **#3b** — configure coverage tooling, report %; run, then `db-restore.sh` (test run truncates ship_dev).
+- ✅ **#3b** — DONE: coverage tooling configured in api + web; numbers reported in Cat 5; raw in `docs/audit/raw/cat5-before.txt`; two new findings surfaced (test isolation, hidden web failures).
 - ❓ **LH-guide Q3** — screen-reader smoke test (A/B/C): **DEFERRED by user**, revisit before end of today.
 - Phase-2 / final deliverables (not Phase-1 gate): Improvement Documentation, Discovery write-up polish, Demo video, AI Cost Analysis, Social post, Deployed fork.

@@ -124,23 +124,24 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 5 — Test Coverage and Quality
 
-**How measured:** unit = `pnpm --filter @ship/api test` run **3× for flakiness**; E2E = static catalog (`grep`/spec count) — full run blocked (see findings); coverage = `pnpm --filter @ship/api test:coverage`. Commit `f09871b`.
+**How measured:** unit (api) = `pnpm --filter @ship/api test` run **3× for flakiness**; unit (web) = `pnpm --filter @ship/web exec -- vitest run`; E2E = static catalog (full run blocked — see findings); coverage = **configured per PRD instruction** (`@vitest/coverage-v8@4.0.17` added to both packages + `test:coverage` script added to web — Decision #3b). Commits `f09871b` (initial) + #3b follow-up. Raw: `docs/audit/raw/cat5-before.txt`. Coverage JSON: `api/coverage/coverage-summary.json`, `web/coverage/coverage-summary.json`.
 
 | Metric | Baseline |
 |--------|----------|
-| Total tests | **451 unit (api, 28 files)** + **~882 E2E across 71 spec files** (static count) |
-| Pass / Fail / Flaky | **unit: 451 / 0 / 0** (3 consecutive runs identical — stable). **E2E: not obtainable** (see ⚠️) |
-| Suite runtime | **unit: ~15–16 s** (3 runs: 16/15/16 s). E2E: not obtainable |
-| Critical flows with zero unit coverage | document CRUD via HTTP, auth, **real-time Yjs collaboration** (no unit tests; only E2E, which can't be run) — `web/` has 16 unit files but `pnpm test` never runs them (TI2) |
-| Code coverage % | **Unmeasurable as-shipped.** api: configured (v8) but `@vitest/coverage-v8` **not installed** → `test:coverage` errors. web: **no coverage config at all** |
+| Total tests | **451 unit (api, 28 files)** + **151 unit (web, 16 files)** + **~882 E2E across 71 spec files** (static count) — total ≈ **1,484** vs README's "73+" |
+| Pass / Fail / Flaky | **api: 451 / 0 / 0** on a fresh `pnpm db:seed` (3 runs stable). **web: 138 / 13 / —** (8.6% failing — TipTap/ProseMirror schema). **E2E: not obtainable** (see ⚠️) |
+| Suite runtime | api ~15–16 s · web ~2.4 s · E2E not obtainable |
+| Critical flows with zero unit coverage | document CRUD via HTTP, auth, **real-time Yjs collaboration** (no unit tests; only E2E, which can't be run); `web/` 16 unit files not run by default `pnpm test` |
+| Code coverage % (if measured) | **api — Lines 40.52% · Stmts 40.34% · Funcs 40.9% · Branches 33.44%** (configured per #3b). **web — Lines 28.53% · Stmts 27.63% · Funcs 25.6% · Branches 19.38%** (configured per #3b; `--coverage.reportOnFailure` because 13 tests fail). |
 
 **Weaknesses / opportunities (ranked):**
 1. **High — the mandated E2E runner does not exist.** `CLAUDE.md:56` requires `/e2e-test-runner` (background run + `test-results/summary.json` polling) and forbids `pnpm test:e2e` directly (output-explosion crash class, cf. the documented 90 GB incident). But **no `e2e-test-runner` skill exists** in `.claude/skills/` or anywhere in the repo. The codebase's *only sanctioned* way to run its 882-test suite is unimplemented → E2E pass/fail/runtime/flakiness is unmeasurable by the prescribed method. Largest Cat-5 gap.
-2. **High — coverage is unmeasurable as-shipped.** api's `test:coverage` references `@vitest/coverage-v8` which isn't a dependency (command fails); `web/` has no coverage config. The deck's "configure coverage if absent and report per package" is itself the improvement target.
-3. **Medium — `pnpm test` only runs api unit (TI2).** 16 `web/` unit test files are excluded from the default command → silent blind spot; the rubric's literal "run `pnpm test`" misses the entire frontend.
-4. **Medium — doc undercount (TI1).** README/PRD/CLAUDE say "73+ tests"; reality ≈ **882 across 71 specs** (~10× off). "73" ≈ spec-file count, mislabeled as tests.
-5. **Medium — running unit tests destroys dev data.** `pnpm --filter @ship/api test` truncates `ship_dev` (no isolated unit DB) — confirmed repeatedly this audit. Real dev-safety footgun.
-6. **Low/positive — unit suite is stable & fast** (451/451 ×3, ~16 s). Honest: the *unit* layer is healthy; the gap is E2E runnability + coverage tooling, not unit flakiness.
+2. **High — coverage tooling was missing as-shipped** (now configured per #3b; previously: `@vitest/coverage-v8` not installed, web had no coverage config). Configuring it is itself the PRD's instruction; numbers above are now measurable per package.
+3. **High — `pnpm test` only runs api unit (TI2), hiding 13 failing web tests.** The default command excludes the entire `web/` package. Running web directly surfaces **13/151 (8.6%) failing tests** (TipTap/ProseMirror schema errors) that the default command silently doesn't see — a real reliability finding revealed by #3b.
+4. **High (new, surfaced via #1b/#3b) — test suite is not isolated from pre-existing DB shape.** Running api `test:coverage` against the locked snapshot causes **8/451 fails**; running it on a freshly-`pnpm db:seed`-ed DB → **451/451 pass**. Tests depend on a specific pre-state instead of seeding their own. Real test-engineering defect.
+5. **Medium — doc undercount (TI1).** README/PRD/CLAUDE say "73+ tests"; reality ≈ **1,484** across all suites (~20× off). "73" ≈ E2E spec-file count, mislabeled as tests.
+6. **Medium — running unit tests destroys dev data.** `pnpm --filter @ship/api test*` truncates `ship_dev` — confirmed repeatedly. Mitigated this audit by `scripts/audit/db-restore.sh` (snapshot), but the underlying test-isolation defect remains.
+7. **Low/positive — api unit suite is stable & fast** on the supported pre-state (451/451 ×3, ~16 s). The healthy part of the test stack.
 
 ---
 

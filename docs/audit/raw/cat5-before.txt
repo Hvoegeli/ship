@@ -1,25 +1,58 @@
-# Cat 5 Test Coverage — before
-commit: f09871b
-condition: api unit run 3x; E2E static catalog; coverage attempted
+# Cat 5 Test Coverage & Quality — before
+commit: c3b02e5 (+ #3b coverage configuration)
+date: 2026-05-19 (re-baselined per Decision #3b)
+condition: snapshot-pinned (627 docs) for /coverage runs vs fresh-seed sensitivity below
+tools: vitest 4.0.17 · @vitest/coverage-v8@4.0.17 (added to api+web per PRD)
+       api: scripts.test:coverage = "vitest run --coverage" (pre-existing)
+       web: scripts.test:coverage added by #3b
 
-## Unit (api) — pnpm --filter @ship/api test, 3 consecutive runs
-RUN 1: 28 files / 451 tests passed | wall 16s
-RUN 2: 28 files / 451 tests passed | wall 15s
-RUN 3: 28 files / 451 tests passed | wall 16s
-=> 451/451 pass, 0 fail, 0 flaky, stable ~15-16s
+## Unit tests — api (28 files / 451 tests)
+- pnpm --filter @ship/api test x3 (earlier baseline, fresh pnpm db:seed)
+  -> 451/451 pass, ~15-16 s each (16/15/16 s). 0 flaky.
+- pnpm --filter @ship/api test:coverage on the LOCKED SNAPSHOT (627 docs)
+  -> 443 pass / 8 FAIL.
+- Re-seed via `pnpm db:seed` + `seed-augment.sql` -> 451/451 pass again.
+- ==> Test suite is NOT isolated from pre-existing DB shape (NEW finding from #3b).
 
-## E2E (static catalog; full run BLOCKED)
-spec files: 71  | test() count (regex): ~882 | test.fixme=2 test.skip=0
-BLOCKER: CLAUDE.md:56 mandates /e2e-test-runner skill; that skill does NOT
-exist in .claude/skills/ (only ship-deploy, ship-philosophy-reviewer,
-ship-worktree-preflight). Direct `pnpm test:e2e` forbidden (crash class).
-=> E2E pass/fail/runtime/flakiness NOT obtainable by sanctioned method.
+## Unit tests — web (16 files / 151 tests)
+- pnpm --filter @ship/web exec -- vitest run -> 138 pass / 13 FAIL
+  (3 of 16 files fail). Failures cluster around TipTap/ProseMirror schema.
+- Hidden by default `pnpm test` (which runs ONLY @ship/api).
 
-## Coverage — UNMEASURABLE AS-SHIPPED
-api: vitest.config sets coverage provider 'v8' but @vitest/coverage-v8 is
-NOT an installed dependency -> `pnpm --filter @ship/api test:coverage`
-errors: "MISSING DEPENDENCY Cannot find dependency '@vitest/coverage-v8'".
-web: no coverage block in web/vitest config at all.
+## E2E (~882 tests / 71 spec files)
+- Not obtainable by the sanctioned method. CLAUDE.md mandates the
+  `/e2e-test-runner` skill (background + summary.json polling) and
+  forbids `pnpm test:e2e` directly (output-explosion / 90 GB crash class).
+- No such skill exists anywhere in the repo (.claude/skills/ has only
+  ship-deploy, ship-philosophy-reviewer, ship-worktree-preflight).
+- E2E pass/fail/runtime/flakiness therefore = NOT OBTAINABLE.
 
-## Data-safety: `pnpm --filter @ship/api test` truncates ship_dev
-(no isolated unit DB) — observed repeatedly; required re-seed each time.
+## Code coverage % (configured per PRD #3b)
+api (vitest run --coverage, fresh seed, v8 provider):
+  Statements : 40.34% ( 3288/8150 )
+  Branches   : 33.44% ( 1457/4357 )
+  Functions  : 40.9%  ( 243/594 )
+  Lines      : 40.52% ( 3199/7893 )
+
+web (vitest run --coverage --coverage.reportOnFailure=true; 13 fails):
+  Statements : 27.63% ( 474/1715 )
+  Branches   : 19.38% ( 196/1011 )
+  Functions  : 25.6%  ( 106/414 )
+  Lines      : 28.53% ( 456/1598 )
+
+## Critical user flows with zero unit coverage
+- Document CRUD via HTTP (only covered by E2E, which can't be run)
+- Authentication / session lifecycle (only E2E)
+- Real-time Yjs collaboration (only E2E)
+- Sprint / week management (only E2E)
+
+## Reproduction
+- cat 5 coverage requires a FRESHLY-seeded DB (the locked snapshot causes 8
+  api fails due to test/state coupling -- itself a finding):
+    pnpm db:seed
+    docker exec -i ship-postgres-1 psql -U ship -d ship_dev < scripts/audit/seed-augment.sql
+    pnpm --filter @ship/api exec -- vitest run --coverage --coverage.reporter=json-summary
+    bash scripts/audit/db-restore.sh   # return to the locked snapshot
+    pnpm --filter @ship/web exec -- vitest run --coverage --coverage.reportOnFailure=true --coverage.reporter=json-summary
+- Coverage summary JSON written by vitest to api/coverage/coverage-summary.json
+  and web/coverage/coverage-summary.json.
