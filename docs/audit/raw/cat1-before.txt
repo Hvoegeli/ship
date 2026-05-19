@@ -1,0 +1,34 @@
+# Cat 1 Type Safety — before
+commit: 44f55d6b363b400c9ea35b0fae66111f6fd9e0ee
+date: 2026-05-19T00:27:13.650Z
+tool: TypeScript Compiler API 5.9.3 (AST count, not regex)
+strict mode: ENABLED (root tsconfig: strict, noUncheckedIndexedAccess, noImplicitReturns, noFallthroughCasesInSwitch)
+note: noImplicitAny on (via strict) -> implicit-any is a compile error; explicit-any is the measurable surface.
+no linter configured in repo (no ESLint / @typescript-eslint) -> compiler API is the reproducible instrument.
+
+## Scope A - non-test src/ (PRIMARY baseline; the 25% target applies here)
+pkg     | files |  any |  as | nonnull(!) | @ts-ignore
+api     |    81 |  65 | 135 |        292 | 0
+web     |   182 |  29 | 298 |         33 | 0
+shared  |     8 |   0 |   0 |          0 | 0
+TOTAL   |   271 |  94 | 433 |        325 | 0
+GRAND TOTAL violations (A) = 852   | 25% reduction target = 213
+
+## Scope B - all incl tests (completeness)
+pkg     | files |  any |  as | nonnull(!) | @ts-ignore
+api     |   109 | 238 | 305 |        296 | 0
+web     |   198 |  33 | 314 |         33 | 1
+shared  |     8 |   0 |   0 |          0 | 0
+TOTAL   |   315 | 271 | 619 |        329 | 1
+
+## Top 10 violation-dense files (scope A)
+  84  api/src/routes/weeks.ts  (any=11 as=25 !=48 tsig=0)
+  51  api/src/routes/projects.ts  (any=15 as=10 !=26 tsig=0)
+  48  api/src/routes/issues.ts  (any=4 as=7 !=37 tsig=0)
+  37  web/src/pages/UnifiedDocumentPage.tsx  (any=0 as=36 !=1 tsig=0)
+  35  api/src/db/seed.ts  (any=0 as=0 !=35 tsig=0)
+  31  api/src/routes/team.ts  (any=0 as=3 !=28 tsig=0)
+  28  web/src/components/UnifiedEditor.tsx  (any=0 as=28 !=0 tsig=0)
+  26  api/src/routes/admin.ts  (any=0 as=12 !=14 tsig=0)
+  24  web/src/components/sidebars/PropertiesPanel.tsx  (any=0 as=24 !=0 tsig=0)
+  23  api/src/routes/weekly-plans.ts  (any=0 as=11 !=12 tsig=0)

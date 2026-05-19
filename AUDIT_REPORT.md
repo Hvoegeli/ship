@@ -24,19 +24,31 @@
 
 ## Category 1 — Type Safety
 
-**How measured:** _tool + commands + methodology_ → `scripts/audit/cat1-type-safety.sh`
+**How measured:** `node scripts/audit/cat1-type-safety.mjs before` — **TypeScript Compiler API 5.9.3** AST walk (no regex; `as const` excluded structurally). Raw: `docs/audit/raw/cat1-before.txt`. Reproducible: re-run same script for "after". Repo has **no linter** (no ESLint/@typescript-eslint), so the compiler API is the defensible instrument. `noImplicitAny` is on (via `strict`) → implicit-any is a compile error, not a measurable count; explicit-any is the surface. Baseline commit `44f55d6`.
 
-| Metric | Baseline |
-|--------|----------|
-| Total `any` types | ___ |
-| Total type assertions (`as`) | ___ |
-| Total non-null assertions (`!`) | ___ |
-| Total `@ts-ignore` / `@ts-expect-error` | ___ |
-| Strict mode enabled? | **Yes** (root tsconfig: strict + noUncheckedIndexedAccess + noImplicitReturns + noFallthroughCasesInSwitch) |
-| Strict mode error count (if disabled) | N/A (enabled) |
-| Top 5 violation-dense files | ___ |
+**Scope A — non-test `src/` (primary; the 25% target applies here):**
 
-**Weaknesses / opportunities (ranked):** _from registers TS1–TS5, S7_
+| Metric | Baseline | by package |
+|--------|----------|------------|
+| Total `any` types | **94** | api 65 · web 29 · shared 0 |
+| Total type assertions (`as`) | **433** | api 135 · web 298 · shared 0 |
+| Total non-null assertions (`!`) | **325** | api 292 · web 33 · shared 0 |
+| Total `@ts-ignore`/`@ts-expect-error` | **0** | (1 in tests only) |
+| **Total violations** | **852** | 25% target = **213** |
+| Strict mode enabled? | **Yes** | strict + noUncheckedIndexedAccess + noImplicitReturns + noFallthroughCasesInSwitch (web tsconfig omits the last 3 — TS1) |
+| Strict error count (if disabled) | N/A (enabled) | |
+| Top 5 violation-dense files | weeks.ts (84) · projects.ts (51) · issues.ts (48) · UnifiedDocumentPage.tsx (37) · seed.ts (35) | |
+
+Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is far more loosely typed (api tests alone = 238 `any`).
+
+**Methodology correction (recorded for honesty — graded):** orientation used regex and **undercounted `!` by ~100×** (estimated ~3; AST finds 325) and over-counted `as`. The audit number supersedes it; this is exactly the refinement orientation finding TS3 flagged as required.
+
+**Weaknesses / opportunities (ranked):**
+1. **High — non-null `!` is the dominant risk (325, api 292).** Each `x!` silently asserts non-null; under `strictNullChecks` these are deliberate safety-overrides and the largest single violation class. Top targets: `weeks.ts` (48), `issues.ts` (37), `seed.ts` (35), `team.ts` (28).
+2. **High — `as` assertions (433), web-heavy (298).** Confirms register S7: downstream loss of discriminated-union narrowing (`UnifiedDocumentPage.tsx` 36, `UnifiedEditor.tsx` 28, `PropertiesPanel.tsx` 24).
+3. **Medium — explicit `any` (94 src) concentrated in api routes** (`projects.ts` 15, `weeks.ts` 11) + the `y-protocols.d.ts` shim (TS4).
+4. **Medium — no linter at all.** No automated guard prevents new violations; configuring `@typescript-eslint` is itself a measurable, durable improvement (TS1/TS3).
+5. **Low/scoping — `shared/` is clean (0).** Do not spend Cat-1 effort there (confirms S-findings).
 
 ---
 
