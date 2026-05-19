@@ -18,7 +18,8 @@
 | Node / pnpm | v20.20.2 / 10.27.0 (corepack) |
 | DB | PostgreSQL 16 (Docker `ship-postgres-1`), seeded |
 | OS / HW | macOS (Darwin 23.6.0), aarch64 |
-| Seed volume | _record `documents`/`issues`/`users`/`weeks` counts here_ |
+| Seed volume (CONDITION OF RECORD) | **documents=577, issues=328, sprints=35, users=31, associations=625** — `pnpm db:seed` + `scripts/audit/seed-augment.sql` (deterministic; re-run identically for Phase-2 "after"). Meets deck Cat-3 bar (500+ docs / 100+ issues / 20+ users / 10+ sprints). |
+| ⚠️ Data-safety finding | `pnpm --filter @ship/api test` (unit tests) connect to the same `DATABASE_URL` and **truncate `ship_dev`** — running unit tests destroys seed data. Logged as Cat-5 finding. |
 
 ---
 
