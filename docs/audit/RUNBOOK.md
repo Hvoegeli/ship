@@ -80,6 +80,7 @@ Status: ✅ decided & applied · 🔵 decided, pending work · ❓ OPEN (needs u
 | LH-guide Q1 | Lighthouse: 3 runs/page → **median**; persist JSON+HTML to `reports/a11y/<phase>/` | user → recommended | ShipShape Lighthouse guide mandates it; we'd observed variance (main_docs 100/91/91) | ✅ applied |
 | LH-guide Q2 | Keep the **same 6 pages** as Cat 6/axe (don't expand to editor-active/sprint/search) | user → recommended | apples-to-apples cross-tool comparison | ✅ |
 | LH-guide Q3 | Screen-reader smoke test: A document-gap / B manual VoiceOver / C a11y-tree proxy | **user — OPEN** | explanation given; awaiting choice | ❓ awaiting user |
+| Rough edge #5 | Re-run cat6/cat7/cat7-lighthouse to refresh raw headers (`577+` → snapshot) **(a)** vs leave-as-is with the volume-independent note **(b)** | user → (a) leave as-is | categories are volume-independent (a11y/error-handling don't depend on row count); the AUDIT_REPORT Environment-of-record states this explicitly | ✅ no action; the three raw files (`cat6-before.txt`, `cat7-before.txt`, `cat7-lighthouse-before.txt`) retain their pre-pin headers by design |
 | Instrument validations | RT1 online-control; a11y login-control; Probe 7 contiguous-marker fix | me | a green/red result is not trusted until a control proves the instrument | ✅ documented in `AUDIT_REPORT.md` |
 
 ## 5. Chronological commit log (the path)
