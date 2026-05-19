@@ -2,6 +2,7 @@
 
 > **Hard gate.** Baseline measurements for all 7 categories. *No fixes during the audit.*
 > Companion docs: `ORIENTATION_NOTES.md` (system mental model + finding registers),
+> `docs/audit/RUNBOOK.md` (**reproducible path + decision log — replay this audit from a clean clone**),
 > `scripts/audit/` (reproducible harness — every baseline re-runnable for Phase 2 before/after),
 > `docs/audit/raw/` (raw tool output).
 >
@@ -144,7 +145,7 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 6 — Runtime Error and Edge Case Handling
 
-**How measured:** reproducible browser harness `scripts/audit/cat6-runtime.mjs` (headless Chromium via Playwright; one-time repro prereq `npx playwright install chromium` — tooling, not app code). 5 probes: (1) console/page/network errors across 6 key pages, (2) malformed input to the API, (3) RT1 collab durability with a validated instrument + **online control** + API-verified persistence, (4) slow-3G load, (5) Postgres error-log scan. Raw → `docs/audit/raw/cat6-before.txt`. Dev build, condition of record (577+ docs / 328 issues / 31 users).
+**How measured:** reproducible browser harness `scripts/audit/cat6-runtime.mjs` (headless Chromium via Playwright; one-time repro prereq `npx playwright install chromium` — tooling, not app code). **7 probes:** (1) console/page/network errors across 6 key pages, (2) malformed input to the API, (3) RT1 collab durability with a validated instrument + **online control** + API-verified persistence, (4) slow-3G load, (5) Postgres error-log scan, (6) **HTML/script-injection (stored-XSS)**, (7) **two clients editing the same field simultaneously**. Raw → `docs/audit/raw/cat6-before.txt`. Dev build, condition of record (577+ docs / 328 issues / 31 users). Probes 6–7 added per user decision #4b (closing the PRD "How to Measure" items earlier scoped out).
 
 | Metric | Baseline |
 |--------|----------|
@@ -163,6 +164,9 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 | Oversized title (100k chars) | **400 clean JSON Zod error** (`too_big`, max 255) | ✅ correct validation |
 | Wrong Content-Type (`text/plain`) | **201 Created** — document created from unparsed body | ⚠️ silent junk-doc creation |
 | Bad UUID in path (`/documents/not-a-uuid`) | **500 `Internal server error`** + raw Postgres `invalid input syntax for type uuid` | ⚠️ unvalidated param → DB error as 500 |
+| HTML/script-injection in title+body (Probe 6) | **Stored RAW** (no server sanitization) but **not executed** — React/TipTap escapes on render | ⚠️ defense-in-depth gap (latent stored-XSS for any non-escaping consumer) |
+
+**Concurrent-edit test (Probe 7):** two independent Yjs clients/contexts editing the same document field simultaneously (`Promise.all` over both clients' contiguous markers) → **PASS, stable across 3 runs** (both markers API-verified present, 0 console errors). *Instrument-validation note (recorded for honesty):* the first implementation interleaved the two markers character-by-character so the contiguous strings were undetectable and it reported a false `FAIL`; fixing **only** the typing pattern flipped it to PASS — proving the failure was the instrument, not data loss (same discipline as the RT1 control). Caveat: both clients use the same account but separate Yjs connections — a valid CRDT data-integrity test, not an identity/permission test.
 
 **Weaknesses / opportunities (ranked):**
 1. **High — unvalidated path params surface raw DB errors as HTTP 500.** `/api/documents/not-a-uuid` → Postgres `invalid input syntax for type uuid` → generic 500 (cross-validated by Probe 5: exactly 1 PG `ERROR` in the window). Should be a 400/404 with input validation before the query; also a minor info-disclosure (leaks the column type). Maps to **RF6**.
@@ -172,6 +176,8 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 5. **Medium — slow-3G first load ≈ 4.9 s** for the main page (`wall_load ≈ 4.88 s`, TTFB ≈ 2–3 ms locally ⇒ ~all of it is bundle transfer). Directly corroborates Cat 2 (575 kB gzip in one chunk); on real 3G this is materially worse.
 6. **Low / positive — clean under normal use.** Zero console/page/network errors and zero 5xx across the 6 core pages; no error boundary triggered. The runtime baseline is healthy; the gaps are at the API edge (input/error contract) and observability.
 7. **Cross-cutting — no centralized API error logging (observability).** API process stdout isn't captured; only Postgres logs + HTTP status are externally observable, so the "silent failure" class (e.g., RT1 server persist) is hard to detect in production. Pre-req improvement for any reliability work.
+8. **Medium — stored-XSS defense-in-depth gap (Probe 6).** HTML/script payloads in a document title+body are persisted **raw** (no server-side sanitization). Not executed today because React/TipTap escapes on render, so it is *not* an active vulnerability — but any consumer that renders document fields without escaping (exports, emails, a future non-React surface, the API itself) would be exposed. Sanitize on write or document the render-escaping as a hard invariant.
+9. **Low / positive — concurrent collaborative editing is safe (Probe 7).** Two simultaneous Yjs clients editing the same field both survive (CRDT merge), 0 console errors, reproducible ×3. Confirms the real-time core is sound; combined with #4 this scopes the *only* genuine collab risk to the server-side swallowed-persist path.
 
 ---
 

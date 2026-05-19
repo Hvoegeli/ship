@@ -1,6 +1,6 @@
 # Cat 6 Runtime Errors — before
-commit: 02ae6e8e1b89f1bdd7f82443c7e0c2c781cb93e7
-date: 2026-05-19T16:05:10.763Z
+commit: 8419aa708998abdb9367292cb86ffca315c5d474
+date: 2026-05-19T19:20:55.877Z
 condition: 577+ docs / 328 issues / 31 users; web :5173 (dev, StrictMode ON), api :3000
 knobs: settle=2500ms offline_wait=4000ms 3G=slow(1.6Mbps/150ms)
 
@@ -19,7 +19,7 @@ team_dir      |             0 |         0 |         0 | 0
 - bad_json_body        -> 400 <!DOCTYPE html> <html lang="en"> <head> <meta charset="utf-8"> <title>Error</title> </head> <body> <pre>SyntaxError: Une
 - missing_csrf         -> 403 <!DOCTYPE html> <html lang="en"> <head> <meta charset="utf-8"> <title>Error</title> </head> <body> <pre>ForbiddenError: 
 - oversized_title_100k -> 400 {"error":"Invalid input","details":[{"code":"too_big","maximum":255,"type":"string","inclusive":true,"exact":false,"mess
-- wrong_content_type   -> 201 {"id":"fd60aeff-19b7-455d-8dba-3074f6ce0149","workspace_id":"81a69640-0f97-4939-93be-93763ae170d6","document_type":"wiki
+- wrong_content_type   -> 201 {"id":"7d7f1479-b1eb-40ec-8aef-f3dff0109e5e","workspace_id":"81a69640-0f97-4939-93be-93763ae170d6","document_type":"wiki
 - bad_uuid_path        -> 500 {"error":"Internal server error"}
 
 ## Probe 3 — RT1 collab durability (offline edit → reconnect; API-verified)
@@ -36,12 +36,21 @@ team_dir      |             0 |         0 |         0 | 0
   synced). Severity/refinement recorded in AUDIT_REPORT.md.
 
 ## Probe 4 — 3G throttle (main page /docs)
-- {"wall_dcl_ms":4877,"wall_load_ms":4884,"ttfb":2,"dom":4876,"load":4882}
+- {"wall_dcl_ms":4845,"wall_load_ms":4851,"ttfb":3,"dom":4844,"load":4850}
 
 ## Probe 5 — server-log scan during run
 - total >=500 HTTP responses observed by browser: 0
 - Postgres ERROR/FATAL lines in run window: 1
-    2026-05-19 16:04:36.993 UTC [23636] ERROR:  invalid input syntax for type uuid: "not-a-uuid"
+    2026-05-19 19:19:57.225 UTC [31910] ERROR:  invalid input syntax for type uuid: "not-a-uuid"
+
+## Probe 6 — HTML/script injection (stored-XSS)
+- stored: STORED-RAW (no server sanitization)
+- executed in browser: not executed (framework escaped on render)
+- detail: payload stored under id 4ef63b15-1226-4519-ad1f-1b81ae95287f; STORED-RAW (no server sanitization); not executed (framework escaped on render)
+
+## Probe 7 — two users editing the same field simultaneously
+- result: PASS (both edits merged — CRDT)
+- detail: concurrent edit: A=true B=true; console errors during=0
 
 Notes: dev build (StrictMode double-invokes effects; React Query Devtools
 mounted). Counts are raw observations; triage/severity assigned in AUDIT_REPORT.md.

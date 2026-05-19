@@ -213,6 +213,76 @@ try {
 }
 const total5xx = Object.values(tally).reduce((s, t) => s + t.http5xx.length, 0);
 
+// ===== PROBE 6: HTML/script injection (stored-XSS) — PRD malformed-input item =====
+// Create a doc whose title carries an XSS payload, read it back via API
+// (stored verbatim?), then RENDER it in the browser and watch for execution
+// (dialog or a window flag). Clean up the doc afterward.
+let xss = { stored: 'n/a', executed: 'n/a', detail: '' };
+try {
+  const PAY = `<img src=x onerror="window.__xss6=1">`;
+  const SCR = `<script>window.__xss6=1<\/script>`;
+  const cr = await context.request.post(`${WEB}/api/documents`, {
+    headers: { 'content-type': 'application/json', 'x-csrf-token': freshCsrf },
+    data: { document_type: 'wiki', title: `XSS6 ${PAY}`, content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: SCR }] }] } },
+  });
+  const created = cr.status() === 201 ? await cr.json() : null;
+  if (created?.id) {
+    const back = await (await context.request.get(`${WEB}/api/documents/${created.id}`)).text();
+    xss.stored = back.includes('onerror=') || back.includes('<script>') ? 'STORED-RAW (no server sanitization)' : 'sanitized/escaped on store';
+    const xp = await context.newPage();
+    let dlg = false;
+    xp.on('dialog', async (d) => { dlg = true; await d.dismiss().catch(() => {}); });
+    await xp.goto(`${WEB}/documents/${created.id}`, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+    await sleep(SETTLE);
+    const flag = await xp.evaluate(() => !!window.__xss6).catch(() => false);
+    xss.executed = (flag || dlg) ? 'EXECUTED (DOM XSS) — CRITICAL' : 'not executed (framework escaped on render)';
+    xss.detail = `payload stored under id ${created.id}; ${xss.stored}; ${xss.executed}`;
+    await xp.close();
+    await context.request.delete(`${WEB}/api/documents/${created.id}`, { headers: { 'x-csrf-token': freshCsrf } }).catch(() => {});
+  } else {
+    xss.detail = `create rejected (${cr.status()}) — could not evaluate`;
+  }
+} catch (e) {
+  xss.detail = `probe error: ${String(e.message).slice(0, 140)}`;
+}
+
+// ===== PROBE 7: two users editing the SAME field simultaneously (PRD item) =====
+// Second authenticated context; both open the same doc; interleave typed
+// edits; API-verify BOTH survive (Yjs CRDT merge) and capture console errors.
+let cc = { result: 'INCONCLUSIVE', detail: '' };
+try {
+  const ctx2 = await browser.newContext();
+  const c2 = (await (await ctx2.request.get(`${WEB}/api/csrf-token`)).json()).token;
+  await ctx2.request.post(`${WEB}/api/auth/login`, { headers: { 'x-csrf-token': c2 }, data: { email: 'dev@ship.local', password: 'admin123' } });
+  const MA = `CCA-${Date.now()}`, MB = `CCB-${Date.now()}`;
+  const pA = await context.newPage();
+  const pB = await ctx2.newPage();
+  let cErr = 0;
+  for (const pg of [pA, pB]) pg.on('console', (m) => { if (m.type() === 'error') cErr++; });
+  await pA.goto(`${WEB}/documents/${docId}`, { waitUntil: 'networkidle', timeout: 30000 });
+  await pB.goto(`${WEB}/documents/${docId}`, { waitUntil: 'networkidle', timeout: 30000 });
+  await Promise.all([pA.waitForSelector('.ProseMirror', { timeout: 15000 }), pB.waitForSelector('.ProseMirror', { timeout: 15000 })]);
+  await sleep(SETTLE * 2);
+  await pA.locator('.ProseMirror').click({ position: { x: 20, y: 10 }, force: true, timeout: 8000 });
+  await pB.locator('.ProseMirror').click({ position: { x: 20, y: 10 }, force: true, timeout: 8000 });
+  // Both clients type their FULL contiguous marker AT THE SAME TIME (real
+  // concurrency via Promise.all). Each marker stays contiguous at its own
+  // client's cursor, so includes() can detect survival; char-level interleave
+  // would make the contiguous string vanish even when no data is lost.
+  await Promise.all([
+    pA.keyboard.type(` ${MA} `, { delay: 25 }),
+    pB.keyboard.type(` ${MB} `, { delay: 25 }),
+  ]);
+  await sleep(OFFLINE_TYPE_WAIT + 8000); // > 2s persist debounce + provider sync
+  const doc = await (await context.request.get(`${WEB}/api/documents/${docId}`)).text();
+  const a = doc.includes(MA), b = doc.includes(MB);
+  cc.result = a && b ? 'PASS (both edits merged — CRDT)' : a || b ? `PARTIAL (only ${a ? MA : MB} survived)` : 'FAIL (both lost)';
+  cc.detail = `concurrent edit: A=${a} B=${b}; console errors during=${cErr}`;
+  await pA.close(); await pB.close(); await ctx2.close();
+} catch (e) {
+  cc.detail = `probe error: ${String(e.message).slice(0, 140)}`;
+}
+
 await browser.close();
 
 // ---- report ----
@@ -265,6 +335,15 @@ P('## Probe 5 — server-log scan during run');
 P(`- total >=500 HTTP responses observed by browser: ${total5xx}`);
 P(`- Postgres ERROR/FATAL lines in run window: ${pgErrors.length}`);
 pgErrors.forEach((l) => P(`    ${l.slice(0, 160)}`));
+P('');
+P('## Probe 6 — HTML/script injection (stored-XSS)');
+P(`- stored: ${xss.stored}`);
+P(`- executed in browser: ${xss.executed}`);
+P(`- detail: ${xss.detail}`);
+P('');
+P('## Probe 7 — two users editing the same field simultaneously');
+P(`- result: ${cc.result}`);
+P(`- detail: ${cc.detail}`);
 P('');
 P('Notes: dev build (StrictMode double-invokes effects; React Query Devtools');
 P('mounted). Counts are raw observations; triage/severity assigned in AUDIT_REPORT.md.');
