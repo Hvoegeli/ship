@@ -1,0 +1,25 @@
+# Cat 5 Test Coverage — before
+commit: f09871b
+condition: api unit run 3x; E2E static catalog; coverage attempted
+
+## Unit (api) — pnpm --filter @ship/api test, 3 consecutive runs
+RUN 1: 28 files / 451 tests passed | wall 16s
+RUN 2: 28 files / 451 tests passed | wall 15s
+RUN 3: 28 files / 451 tests passed | wall 16s
+=> 451/451 pass, 0 fail, 0 flaky, stable ~15-16s
+
+## E2E (static catalog; full run BLOCKED)
+spec files: 71  | test() count (regex): ~882 | test.fixme=2 test.skip=0
+BLOCKER: CLAUDE.md:56 mandates /e2e-test-runner skill; that skill does NOT
+exist in .claude/skills/ (only ship-deploy, ship-philosophy-reviewer,
+ship-worktree-preflight). Direct `pnpm test:e2e` forbidden (crash class).
+=> E2E pass/fail/runtime/flakiness NOT obtainable by sanctioned method.
+
+## Coverage — UNMEASURABLE AS-SHIPPED
+api: vitest.config sets coverage provider 'v8' but @vitest/coverage-v8 is
+NOT an installed dependency -> `pnpm --filter @ship/api test:coverage`
+errors: "MISSING DEPENDENCY Cannot find dependency '@vitest/coverage-v8'".
+web: no coverage block in web/vitest config at all.
+
+## Data-safety: `pnpm --filter @ship/api test` truncates ship_dev
+(no isolated unit DB) — observed repeatedly; required re-seed each time.
