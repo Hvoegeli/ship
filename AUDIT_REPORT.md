@@ -77,19 +77,25 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 
 ## Category 3 — API Response Time
 
-**How measured:** _seed volume, endpoint selection, load tool, concurrency_ → `scripts/audit/cat3-api.sh`
+**How measured:** dependency-free Node concurrent-load harness (`node scripts/audit/cat3-api.mjs before`) — fixed worker pool, warmup=10, budget=120 req/cell, **API `:3000` direct (no Vite proxy — P1)**. Endpoints = the 5 key flows traced in Cat 4. 62s gap between endpoints so each runs in a fresh rate-limit window. Condition: 577 docs/328 issues/31 users. Raw (full 10/25/50 matrix): `docs/audit/raw/cat3-before.txt`. Commit `7a975a0`.
+
+Headline = **concurrency 25** (mid); full 10/25/50 in raw.
 
 | Endpoint | P50 | P95 | P99 |
 |----------|-----|-----|-----|
-| 1. ___ | ___ms | ___ms | ___ms |
-| 2. ___ | ___ms | ___ms | ___ms |
-| 3. ___ | ___ms | ___ms | ___ms |
-| 4. ___ | ___ms | ___ms | ___ms |
-| 5. ___ | ___ms | ___ms | ___ms |
+| 1. `GET /api/documents?document_type=wiki` (main page, ~300 KB) | 163ms | **201ms** | 211ms |
+| 2. `GET /api/issues` (list issues, ~280 KB, 328 rows) | 101ms | **124ms** | 130ms |
+| 3. `GET /api/weeks` (sprint board) | 20ms | 25ms | 27ms |
+| 4. `GET /api/search/mentions?q=load` (search) | 16ms | 20ms | 21ms |
+| 5. `GET /api/documents/:id` (view document) | 18ms | 23ms | 26ms |
 
-Concurrency tested: 10 / 25 / 50. **Method note (P1):** hit API `:3000` directly, never the Vite `:5173` proxy.
+Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly with concurrency** on the slow two: main_page 100→201→**362ms**, list_issues 63→124→**222ms**.
 
-**Weaknesses / opportunities (ranked):** _RF2 (per-request session SELECT+UPDATE), P2 (shared event loop), RT2_
+**Weaknesses / opportunities (ranked):**
+1. **High — two unbounded list endpoints dominate latency & degrade with load.** `main_page` and `list_issues` are 5–10× slower than the other three and worsen ~linearly with concurrency. Cat-4 proved the SQL is <1.5 ms → the cost is **serializing 300 KB/280 KB JSON on the single shared REST+WS event loop** (orientation RT2/P2, now measured). Pagination/`LIMIT` on these two = the deck's *"20% P95 reduction on ≥2 endpoints"* target.
+2. **Medium — aggressive global rate limiter** (`apiLimiter`: **1000 req/min dev, 100 req/min prod**, per-IP). 100/min in production is very low for a multi-user collaborative app; first measurement run hit it (200/200 → 429). Real API-availability concern; also a measurement hazard documented in the harness.
+3. **Medium — RF2 per-request session write** adds a DB round-trip to every endpoint's latency floor (confirmed in Cat 4); compounds #1 under concurrency.
+4. **Low — fast endpoints are genuinely fast** (view_document/search/sprint_board P95 <25 ms @25). Honest scoping: Cat-3 gains come from the two list endpoints, not broad slowness.
 
 ---
 
