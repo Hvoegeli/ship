@@ -144,17 +144,34 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 6 — Runtime Error and Edge Case Handling
 
-**How measured:** DevTools console, disconnect/reconnect, malformed input, 3G throttle, server logs → `scripts/audit/cat6-runtime.md` (manual protocol)
+**How measured:** reproducible browser harness `scripts/audit/cat6-runtime.mjs` (headless Chromium via Playwright; one-time repro prereq `npx playwright install chromium` — tooling, not app code). 5 probes: (1) console/page/network errors across 6 key pages, (2) malformed input to the API, (3) RT1 collab durability with a validated instrument + **online control** + API-verified persistence, (4) slow-3G load, (5) Postgres error-log scan. Raw → `docs/audit/raw/cat6-before.txt`. Dev build, condition of record (577+ docs / 328 issues / 31 users).
 
 | Metric | Baseline |
 |--------|----------|
-| Console errors during normal usage | ___ |
-| Unhandled promise rejections (server) | ___ |
-| Network disconnect recovery | Pass / Partial / Fail |
-| Missing error boundaries | ___ |
-| Silent failures identified | ___ |
+| Console errors during normal usage | **0** across all 6 pages (login, docs, view-document, issues, my-week, team-dir): 0 `console.error`, 0 uncaught `pageerror`, 0 failed requests, 0 ≥500 responses |
+| Unhandled promise rejections (server) | Not directly observable — **API stdout is not centrally captured** (observability gap). Proxy: **1** Postgres `ERROR` in run window (the bad-UUID 500 below); 0 browser-visible 5xx during normal nav |
+| Network disconnect recovery | **Pass** (refines orientation RT1). Online control PERSISTED (instrument valid); transient disconnect with tab open → edits PERSISTED; Yjs **IndexedDB offline store present** (`ship-wiki-<id>`, `ship-meta`, `ship-query-cache`) → survives tab close too |
+| Missing error boundaries | None triggered in normal use (0 pageerrors). Error-boundary coverage under fault injection not exercised this pass |
+| Silent failures identified | **`wrong_content_type` → 201**: a `text/plain` body silently creates a default wiki document (no Content-Type guard). Plus orientation RT1/RT3 residual: server-side 2s-debounced Yjs persist swallows failures |
 
-**Weaknesses / opportunities (ranked):** _RT1 (data-loss, the required ≥1 scenario), RT3, RF6_
+**Malformed-input matrix (Probe 2):**
+
+| Input | Result | Verdict |
+|-------|--------|---------|
+| Bad JSON body | **400 + HTML stack-trace page** (`<pre>SyntaxError…`) | ⚠️ leaks stack, non-JSON contract |
+| Missing CSRF token | **403 + HTML `ForbiddenError` stack page** | ⚠️ same info leak / inconsistent shape |
+| Oversized title (100k chars) | **400 clean JSON Zod error** (`too_big`, max 255) | ✅ correct validation |
+| Wrong Content-Type (`text/plain`) | **201 Created** — document created from unparsed body | ⚠️ silent junk-doc creation |
+| Bad UUID in path (`/documents/not-a-uuid`) | **500 `Internal server error`** + raw Postgres `invalid input syntax for type uuid` | ⚠️ unvalidated param → DB error as 500 |
+
+**Weaknesses / opportunities (ranked):**
+1. **High — unvalidated path params surface raw DB errors as HTTP 500.** `/api/documents/not-a-uuid` → Postgres `invalid input syntax for type uuid` → generic 500 (cross-validated by Probe 5: exactly 1 PG `ERROR` in the window). Should be a 400/404 with input validation before the query; also a minor info-disclosure (leaks the column type). Maps to **RF6**.
+2. **High — error responses leak stack traces as HTML.** Bad JSON and missing-CSRF return Express's default HTML error page with a `SyntaxError`/`ForbiddenError` stack instead of the JSON envelope used elsewhere (the Zod 400 *is* clean JSON). Inconsistent error contract + information disclosure across the whole API surface.
+3. **Medium — no Content-Type enforcement → silent document creation.** A `text/plain` body still returns **201** and persists a default wiki doc (unparsed body → silent defaults). Junk/blank-document and data-integrity risk; a silent failure by definition.
+4. **Medium (positive correction) — RT1 empirically downgraded.** Orientation hypothesized collab data-loss from code reading (2s debounce, failure-silent persist). The browser test **does not reproduce client-side loss**: a validated instrument (force-click + `keyboard.type`, API-verified) shows the online control PERSISTED, a transient disconnect with the tab open PERSISTED, and a per-doc **Yjs IndexedDB store exists** (survives tab close). Residual risk is narrowed to the **server-side** path only — a swallowed DB-write failure on the debounced persist (client believes it synced). Honest refinement, not a manufactured data-loss claim.
+5. **Medium — slow-3G first load ≈ 4.9 s** for the main page (`wall_load ≈ 4.88 s`, TTFB ≈ 2–3 ms locally ⇒ ~all of it is bundle transfer). Directly corroborates Cat 2 (575 kB gzip in one chunk); on real 3G this is materially worse.
+6. **Low / positive — clean under normal use.** Zero console/page/network errors and zero 5xx across the 6 core pages; no error boundary triggered. The runtime baseline is healthy; the gaps are at the API edge (input/error contract) and observability.
+7. **Cross-cutting — no centralized API error logging (observability).** API process stdout isn't captured; only Postgres logs + HTTP status are externally observable, so the "silent failure" class (e.g., RT1 server persist) is hard to detect in production. Pre-req improvement for any reliability work.
 
 ---
 

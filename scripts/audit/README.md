@@ -7,13 +7,17 @@ Every measurable category has one script here. Each script:
 
 | Script | Category | Status |
 |--------|----------|--------|
-| cat1-type-safety.sh | 1 Type Safety | pending |
-| cat2-bundle.sh | 2 Bundle Size | pending |
-| cat3-api.sh | 3 API Response Time | pending |
-| cat4-db.sh | 4 DB Query Efficiency | pending |
-| cat5-tests.sh | 5 Test Coverage | pending |
-| cat6-runtime.md | 6 Runtime Errors (manual protocol) | pending |
-| cat7-a11y.sh | 7 Accessibility | pending |
+| cat1-type-safety.mjs | 1 Type Safety | done (before) |
+| cat2-bundle.mjs | 2 Bundle Size | done (before) |
+| cat3-api.mjs | 3 API Response Time | done (before) |
+| cat4-db.mjs | 4 DB Query Efficiency | done (before) |
+| cat5-tests (in-report protocol) | 5 Test Coverage | done (before) |
+| cat6-runtime.mjs | 6 Runtime Errors (Playwright browser harness) | done (before) |
+| cat7-a11y | 7 Accessibility | pending |
 
-Run convention: `scripts/audit/catN-*.sh` writes raw output to `docs/audit/raw/catN-<phase>.txt`
-where <phase> = `before` (audit) or `after` (post-implementation).
+Run convention: `node scripts/audit/catN-*.mjs <phase>` writes raw output to
+`docs/audit/raw/catN-<phase>.txt` where <phase> = `before` (audit) or `after`
+(post-implementation). Scripts are re-run UNCHANGED in Phase 2.
+
+Cat 6 one-time repro prerequisite (tooling only, not app code, analogous to
+Cat 2 `vite build` / Cat 4 `ALTER SYSTEM`): `npx playwright install chromium`.
