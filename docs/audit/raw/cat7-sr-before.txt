@@ -1,0 +1,146 @@
+# Cat 7 SR-tree proxy — before
+commit: f3ea026464bef79d6bce16fafcd461c8a03a4cb6
+date: 2026-05-19T22:34:05.151Z
+condition: documents=627 issues=328 sprints=35 users=31 — snapshot-pinned (scripts/audit/db-restore.sh); web :5173 (dev, StrictMode ON)
+method: Playwright a11y-tree snapshot per page; same 6 pages as cat7-a11y.mjs / cat7-lighthouse.mjs
+knobs: settle=2500ms tab_peek=15
+note: proxy only — manual VoiceOver pass (Q3-B) records announcement flow.
+
+## Landmarks per page (jumps an SR user can take: banner/nav/main/contentinfo/…)
+page          | landmarks
+login         | (none)
+main_docs     | (none)
+view_document | complementary:Document list
+issues        | main
+my_week       | (none)
+team_dir      | (none)
+
+## Heading outline + skip flags (SR users outline a page by headings)
+- login: 1 heading(s); level-skips=none
+    h1  Sign in to Ship
+- main_docs: 1 heading(s); level-skips=none
+    h2  Action Items
+- view_document: 1 heading(s); level-skips=none
+    h2  Action Items
+- issues: 1 heading(s); level-skips=none
+    h2  Action Items
+- my_week: 1 heading(s); level-skips=none
+    h2  Action Items
+- team_dir: 1 heading(s); level-skips=none
+    h2  Action Items
+
+## Interactives: total vs unnamed (unnamed = black hole to an SR user)
+page          | total | unnamed | example roles
+login         |     4 |       0 | (none)
+main_docs     |     4 |       0 | (none)
+view_document |    25 |       0 | (none)
+issues        |     4 |       0 | (none)
+my_week       |     4 |       0 | (none)
+team_dir      |     4 |       0 | (none)
+
+## Dialog + live-region presence
+page          | dialogs(role=dialog) | liveRegions(aria-live/alert/status/log)
+login         |                   0 |                                      0
+main_docs     |                   1 |                                      2
+view_document |                   1 |                                      3
+issues        |                   1 |                                      2
+my_week       |                   1 |                                      1
+team_dir      |                   1 |                                      1
+
+## First 15 announcements via Tab (what the SR lands on first)
+- login:
+     1. input: Password
+     2. button: Sign in
+     3. button: Open Tanstack query devtools
+     4. input: Email address
+     5. input: Password
+     6. button: Sign in
+     7. button: Open Tanstack query devtools
+     8. input: Email address
+     9. input: Password
+    10. button: Sign in
+    11. button: Open Tanstack query devtools
+    12. input: Email address
+- main_docs:
+     1. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     2. button: Got it
+     3. button: Close
+     4. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     5. button: Got it
+     6. button: Close
+     7. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     8. button: Got it
+     9. button: Close
+    10. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    11. button: Got it
+    12. button: Close
+    13. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    14. button: Got it
+    15. button: Close
+- view_document:
+     1. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     2. button: Got it
+     3. button: Close
+     4. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     5. button: Got it
+     6. button: Close
+     7. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     8. button: Got it
+     9. button: Close
+    10. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    11. button: Got it
+    12. button: Close
+    13. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    14. button: Got it
+    15. button: Close
+- issues:
+     1. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     2. button: Got it
+     3. button: Close
+     4. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     5. button: Got it
+     6. button: Close
+     7. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     8. button: Got it
+     9. button: Close
+    10. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    11. button: Got it
+    12. button: Close
+    13. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    14. button: Got it
+    15. button: Close
+- my_week:
+     1. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     2. button: Got it
+     3. button: Close
+     4. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     5. button: Got it
+     6. button: Close
+     7. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     8. button: Got it
+     9. button: Close
+    10. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    11. button: Got it
+    12. button: Close
+    13. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    14. button: Got it
+    15. button: Close
+- team_dir:
+     1. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     2. button: Got it
+     3. button: Close
+     4. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     5. button: Got it
+     6. button: Close
+     7. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+     8. button: Got it
+     9. button: Close
+    10. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    11. button: Got it
+    12. button: Close
+    13. button: POST STANDUP Post standup for Week 14 (5 issues assigned) We
+    14. button: Got it
+    15. button: Close
+
+Notes: dev build (StrictMode). Tree snapshot is the same data structure
+a screen reader uses; manual VoiceOver pass (Q3-B) records announcement flow.
