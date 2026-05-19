@@ -48,6 +48,9 @@ const cookie = ((loginRes.headers.getSetCookie?.() || []).join('; ')) || csrfCoo
 if (!(await loginRes.json()).success) throw new Error('login failed');
 
 const docId = sh(`docker exec ${PG} psql -U ship -d ship_dev -tAc "SELECT id FROM documents WHERE document_type='wiki' ORDER BY created_at LIMIT 1"`).trim();
+// Condition of record read LIVE from the DB (no hardcoded drift) — the
+// dataset is snapshot-pinned, see scripts/audit/db-restore.sh.
+const COND = sh(`docker exec ${PG} psql -U ship -d ship_dev -tAc "SELECT 'documents='||(SELECT count(*) FROM documents)||' issues='||(SELECT count(*) FROM documents WHERE document_type='issue')||' sprints='||(SELECT count(*) FROM documents WHERE document_type='sprint')||' users='||(SELECT count(*) FROM users)"`).trim();
 
 const ENDPOINTS = [
   ['main_page',     `/api/documents?document_type=wiki`],
@@ -101,7 +104,7 @@ const P = (s = '') => L.push(s);
 P(`# Cat 3 API Response Time — ${PHASE}`);
 P(`commit: ${sha}`);
 P(`date: ${new Date().toISOString()}`);
-P(`condition: 577 docs / 328 issues / 35 sprints / 31 users; API :3000 direct (no proxy)`);
+P(`condition: ${COND} — snapshot-pinned (scripts/audit/db-restore.sh); API :3000 direct (no proxy)`);
 P(`knobs: warmup=${WARMUP} budget=${BUDGET} req/cell; concurrency ${CONCURRENCIES.join('/')}`);
 P(`pg statement logging: OFF (reset after cat4)`);
 P('');

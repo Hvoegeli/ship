@@ -79,19 +79,19 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 
 ## Category 3 — API Response Time
 
-**How measured:** dependency-free Node concurrent-load harness (`node scripts/audit/cat3-api.mjs before`) — fixed worker pool, warmup=10, budget=120 req/cell, **API `:3000` direct (no Vite proxy — P1)**. Endpoints = the 5 key flows traced in Cat 4. 62s gap between endpoints so each runs in a fresh rate-limit window. Condition: 577 docs/328 issues/31 users. Raw (full 10/25/50 matrix): `docs/audit/raw/cat3-before.txt`. Commit `7a975a0`.
+**How measured:** dependency-free Node concurrent-load harness (`node scripts/audit/cat3-api.mjs before`) — fixed worker pool, warmup=10, budget=120 req/cell, **API `:3000` direct (no Vite proxy — P1)**. Endpoints = the 5 key flows traced in Cat 4. 62s gap between endpoints so each runs in a fresh rate-limit window. **Condition: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw (full 10/25/50 matrix): `docs/audit/raw/cat3-before.txt`. Commit `7a975a0` (re-baselined on the pinned snapshot, commit `87e919f`).
 
-Headline = **concurrency 25** (mid); full 10/25/50 in raw.
+Headline = **concurrency 25** (mid); full 10/25/50 in raw. (Numbers re-measured against the locked snapshot; pattern is identical to the earlier 577-doc run — the two list endpoints dominate and degrade with load.)
 
 | Endpoint | P50 | P95 | P99 |
 |----------|-----|-----|-----|
-| 1. `GET /api/documents?document_type=wiki` (main page, ~300 KB) | 163ms | **201ms** | 211ms |
-| 2. `GET /api/issues` (list issues, ~280 KB, 328 rows) | 101ms | **124ms** | 130ms |
-| 3. `GET /api/weeks` (sprint board) | 20ms | 25ms | 27ms |
-| 4. `GET /api/search/mentions?q=load` (search) | 16ms | 20ms | 21ms |
-| 5. `GET /api/documents/:id` (view document) | 18ms | 23ms | 26ms |
+| 1. `GET /api/documents?document_type=wiki` (main page, ~300 KB) | 185ms | **243ms** | 254ms |
+| 2. `GET /api/issues` (list issues, ~280 KB, 328 rows) | 104ms | **123ms** | 143ms |
+| 3. `GET /api/weeks` (sprint board) | 24ms | 29ms | 30ms |
+| 4. `GET /api/search/mentions?q=load` (search) | 17ms | 21ms | 22ms |
+| 5. `GET /api/documents/:id` (view document) | 33ms | 44ms | 48ms |
 
-Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly with concurrency** on the slow two: main_page 100→201→**362ms**, list_issues 63→124→**222ms**.
+Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly with concurrency** on the slow two: main_page 112→243→**420ms**, list_issues 69→123→**229ms** (@10/25/50, snapshot-pinned).
 
 **Weaknesses / opportunities (ranked):**
 1. **High — two unbounded list endpoints dominate latency & degrade with load.** `main_page` and `list_issues` are 5–10× slower than the other three and worsen ~linearly with concurrency. Cat-4 proved the SQL is <1.5 ms → the cost is **serializing 300 KB/280 KB JSON on the single shared REST+WS event loop** (orientation RT2/P2, now measured). Pagination/`LIMIT` on these two = the deck's *"20% P95 reduction on ≥2 endpoints"* target.
@@ -103,15 +103,15 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 4 — Database Query Efficiency
 
-**How measured:** Postgres `log_statement='all'` + `log_min_duration_statement=0`; `node scripts/audit/cat4-db.mjs before` authenticates (csrf+login) and runs 5 marker-bracketed flows, counting only API connection-pool PIDs (psql/admin PIDs excluded). Condition of record: 577 docs/328 issues/35 sprints/31 users. Raw: `docs/audit/raw/cat4-before.txt`. Commit `14d8734`.
+**How measured:** Postgres `log_statement='all'` + `log_min_duration_statement=0`; `node scripts/audit/cat4-db.mjs before` authenticates (csrf+login) and runs 5 marker-bracketed flows, counting only API connection-pool PIDs (psql/admin PIDs excluded). **Condition of record: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw: `docs/audit/raw/cat4-before.txt`. Commit `14d8734` (re-baselined on the pinned snapshot, `87e919f`).
 
 | User Flow | Endpoint | Total Queries | Slowest (ms) | N+1? |
 |-----------|----------|---------------|--------------|------|
-| Load main page | `GET /api/documents?document_type=wiki` (300 KB resp) | 4 | 1.419 | No |
-| View a document | `GET /api/documents/:id` | 4 | 0.214 | No |
-| List issues | `GET /api/issues` (280 KB resp, 328 rows) | 5 | 0.985 | No |
-| Load sprint board | `GET /api/weeks` | 5 | 0.227 | No |
-| Search content | `GET /api/search/mentions?q=load` | 5 | 0.433 | No |
+| Load main page | `GET /api/documents?document_type=wiki` (300 KB resp) | 4 | 1.61 | No |
+| View a document | `GET /api/documents/:id` | 4 | 0.369 | No |
+| List issues | `GET /api/issues` (280 KB resp, 328 rows) | 5 | 1.158 | No |
+| Load sprint board | `GET /api/weeks` | 5 | 0.382 | No |
+| Search content | `GET /api/search/mentions?q=load` | 5 | 0.470 | No |
 
 **EXPLAIN ANALYZE — slowest query (main_page documents list):** Bitmap Index Scan on `idx_documents_document_type` → Bitmap Heap Scan (filters `workspace_id`/`archived_at`/`deleted_at`) → Sort. **Exec 0.144 ms / Planning 0.561 ms** (planning > execution). The purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` is **not chosen** (low selectivity at this volume).
 

@@ -40,6 +40,8 @@ if (!login.success) throw new Error('login failed: ' + JSON.stringify(login));
 
 // flow targets from current seed
 const docId = psql(`SELECT id FROM documents WHERE document_type='wiki' ORDER BY created_at LIMIT 1`).trim();
+// Condition of record read LIVE from the DB (snapshot-pinned; db-restore.sh).
+const COND = psql(`SELECT 'documents='||(SELECT count(*) FROM documents)||' issues='||(SELECT count(*) FROM documents WHERE document_type='issue')||' sprints='||(SELECT count(*) FROM documents WHERE document_type='sprint')||' users='||(SELECT count(*) FROM users)`).trim();
 
 const FLOWS = [
   ['main_page',    `/api/documents?document_type=wiki`],
@@ -119,7 +121,7 @@ const P = (s = '') => L.push(s);
 P(`# Cat 4 DB Query Efficiency — ${PHASE}`);
 P(`commit: ${sha}`);
 P(`date: ${new Date().toISOString()}`);
-P(`condition: 577 docs / 328 issues / 35 sprints / 31 users (seed-augment.sql)`);
+P(`condition: ${COND} — snapshot-pinned (scripts/audit/db-restore.sh)`);
 P(`method: marker-bracketed flows; API pool PIDs only (psql/admin PIDs excluded)`);
 P('');
 P('flow          | http        | queries | slowest(ms) | N+1?');
