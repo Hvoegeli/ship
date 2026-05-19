@@ -33,7 +33,7 @@
 <p class="sub">Phase 1 (Diagnosis) · branch <code>shipshape/audit</code> · 7/7 categories baselined · companion to <code>AUDIT_REPORT.md</code> · each table uses the PRD's prescribed metrics; each category includes <b>improvement options</b> (audit opportunities — no code changed)</p>
 
 <div class="meta">
-<b>Condition of record (all baselines):</b> documents=577, issues=328, sprints=35, users=31 (<code>pnpm db:seed</code> + <code>seed-augment.sql</code>, deterministic). Node v20.20.2 · PostgreSQL 16 (Docker) · macOS aarch64. Every number is produced by a committed re-runnable script in <code>scripts/audit/</code> → raw in <code>docs/audit/raw/</code>; Phase-2 re-runs the same scripts for before/after. <b>Data-safety:</b> <code>pnpm --filter @ship/api test</code> truncates <code>ship_dev</code>.
+<b>Condition of record (all baselines) — SNAPSHOT-PINNED:</b> documents=627, issues=328, sprints=35, users=31, associations=625. Frozen pg_dump at <code>scripts/audit/snapshot/ship_dev.condition.dump</code>; restore with <code>bash scripts/audit/db-restore.sh</code> (round-trip validated). Node v20.20.2 · PostgreSQL 16 (Docker) · macOS aarch64. Every number is produced by a committed re-runnable script in <code>scripts/audit/</code> → raw in <code>docs/audit/raw/</code>. <b>Data-safety:</b> <code>pnpm --filter @ship/api test</code> truncates <code>ship_dev</code> — restore from the snapshot after.
 </div>
 
 <div class="cat">

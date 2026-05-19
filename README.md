@@ -19,6 +19,45 @@
 
 ---
 
+## 🔎 ShipShape Audit (Gauntlet Week-4 fork) — start here
+
+This fork (`Hvoegeli/ship`, branch [`shipshape/audit`](https://github.com/Hvoegeli/ship/tree/shipshape/audit)) contains a full Phase-1 audit of the upstream Treasury/ship codebase. **No application code is modified** — only reproducible measurement instruments, deterministic test data, and documentation.
+
+**Read in this order:**
+
+| What | Where |
+|------|-------|
+| One-page review summary (PDF) | [`docs/audit/findings-summary.pdf`](docs/audit/findings-summary.pdf) |
+| Full audit report (7 categories, methodology + numbers + ranked findings) | [`AUDIT_REPORT.md`](AUDIT_REPORT.md) |
+| Reproducible path + decision log (read this before you re-run anything) | [`docs/audit/RUNBOOK.md`](docs/audit/RUNBOOK.md) |
+| Pre-audit codebase orientation notes + Discovery write-up | [`ORIENTATION_NOTES.md`](ORIENTATION_NOTES.md) |
+| Raw evidence (per-category) | [`docs/audit/raw/`](docs/audit/raw/) + [`reports/a11y/before/`](reports/a11y/before/) (12 Lighthouse JSON+HTML) |
+| Measurement harness (one script per category) | [`scripts/audit/`](scripts/audit/) |
+
+**Reproduce the baselines from a clean clone:**
+
+```bash
+pnpm install
+# Bring up the dev stack (Postgres in Docker container `ship-postgres-1`, API :3000, web :5173).
+# Then restore the LOCKED condition-of-record snapshot (627 docs / 328 issues / 35 sprints / 31 users):
+bash scripts/audit/db-restore.sh
+
+# Run any/all baselines (each writes raw to docs/audit/raw/catN-before.txt):
+node scripts/audit/cat1-type-safety.mjs before
+node scripts/audit/cat2-bundle.mjs before        # prereq: cd web && VITE_API_URL= npx vite build --sourcemap
+node scripts/audit/cat3-api.mjs before
+node scripts/audit/cat4-db.mjs before            # prereq: PG log_statement='all' (see RUNBOOK §2)
+node scripts/audit/cat6-runtime.mjs before       # prereq: npx playwright install chromium
+node scripts/audit/cat7-a11y.mjs before
+node scripts/audit/cat7-lighthouse.mjs before    # 3-run median; reports → reports/a11y/before/
+```
+
+**One honest call-out about the badges above:** the upstream `Section 508` / `WCAG 2.1 AA` badges are **contradicted** by this audit's Category 7 evidence (broken keyboard navigation on the authenticated app, critical `aria-required-children`, 15 AA color-contrast failures on `/my-week`). Lighthouse scores 91–100 don't disprove that — automated audits don't test keyboard traversal. See [`AUDIT_REPORT.md` § Category 7](AUDIT_REPORT.md#category-7--accessibility-compliance) for the verdict and evidence.
+
+**Project deadlines (this fork only):** audit due Wed noon · early submission Fri · final Sun.
+
+---
+
 ## What is Ship?
 
 Ship is a project management tool that combines documentation, issue tracking, and plan-driven weekly workflows in one place. Instead of switching between a wiki, a task tracker, and a spreadsheet, everything lives together.

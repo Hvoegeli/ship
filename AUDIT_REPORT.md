@@ -117,7 +117,7 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 **Weaknesses / opportunities (ranked):**
 1. **High — universal per-request auth query tax (RF2, now measured).** Every flow runs `SELECT … FROM sessions …` **+** `UPDATE sessions SET last_activity = $1` — **2 of every flow's 4–5 queries are auth overhead**, on every request. Throttling the `last_activity` write (only when stale) cleanly hits the deck's *"20% fewer queries on ≥1 flow"* (e.g., view_document 4→3 = −25%). Strongest Cat-4 improvement target.
-2. **Medium — unbounded result sets / no pagination.** `main_page` (300 KB) and `list_issues` (280 KB, all 328 issues) fetch everything with no `LIMIT`/cursor; query time grows linearly with workspace size (hidden at 577 docs, visible at 10×).
+2. **Medium — unbounded result sets / no pagination.** `main_page` (300 KB) and `list_issues` (280 KB, all 328 issues) fetch everything with no `LIMIT`/cursor; query time grows linearly with workspace size (hidden at 627 docs, visible at 10×).
 3. **Low — well-indexed today; no N+1, no slow query.** Honest baseline: at rubric volume the per-query times are <1.5 ms; the `idx_documents_active` partial index is unused (planner picks the simpler type index). Cat-4 gains come from *query count* (#1), not query speed.
 
 ---
@@ -212,7 +212,7 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 Severity-ranked synthesis across all 7 categories. Each row: the finding, its category, the **committed script that reproduces it** (re-run identically in Phase 2 for before/after), and the measurable Phase-2 lever where the deck specifies one. Full methodology/evidence in the per-category sections above; raw in `docs/audit/raw/`.
 
-**Phase-1 gate: 7 / 7 categories baselined.** Conditions of record fixed (577 docs / 328 issues / 31 users). No application code changed during the audit — only reproducible instruments + deterministic test data.
+**Phase-1 gate: 7 / 7 categories baselined.** Condition of record fixed via the committed snapshot (627 docs / 328 issues / 35 sprints / 31 users / 625 assoc; restore via `bash scripts/audit/db-restore.sh`). No application code changed during the audit — only reproducible instruments + deterministic test data.
 
 ### High
 
@@ -232,7 +232,7 @@ Severity-ranked synthesis across all 7 categories. Each row: the finding, its ca
 | # | Finding | Cat | Reproduce |
 |---|---------|-----|-----------|
 | M1 | Global rate limiter **100 req/min in prod** (per-IP) — very low for a multi-user collaborative app; an availability risk. | 3 | `cat3-api.mjs` |
-| M2 | No pagination/`LIMIT` anywhere — result sets grow linearly with workspace size (hidden at 577 docs, visible at 10×). | 3/4 | `cat3`/`cat4` |
+| M2 | No pagination/`LIMIT` anywhere — result sets grow linearly with workspace size (hidden at 627 docs, visible at 10×). | 3/4 | `cat3`/`cat4` |
 | M3 | No `Content-Type` enforcement: a `text/plain` body still returns **201** and persists a default document (silent junk-doc creation). | 6 | `cat6-runtime.mjs` |
 | M4 | `color-contrast` AA failures (15 nodes, `/my-week`, low-opacity muted text). | 7 | `cat7-a11y.mjs` |
 | M5 | `aria-required-children` (critical rule) + `listitem` (serious) ARIA/structure bugs on main_docs & view_document. | 7 | `cat7-a11y.mjs` |

@@ -2,7 +2,9 @@
 /**
  * Cat 3 — API Response Time baseline (reproducible, dependency-free).
  *
- * Condition of record: seed-augment.sql applied (577 docs / 328 issues / 31 users).
+ * Condition of record: SNAPSHOT-PINNED (scripts/audit/snapshot/ship_dev.condition.dump,
+ * restore via scripts/audit/db-restore.sh). Counts read LIVE from the DB at run
+ * time and printed in the raw output header — no hardcoded drift.
  * P1 rule: hit the API on :3000 DIRECTLY (never the Vite :5173 proxy).
  * Postgres statement logging MUST be off (reset after cat4) or latency is skewed.
  *

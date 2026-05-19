@@ -6,7 +6,9 @@
  *   ALTER SYSTEM SET log_statement='all';
  *   ALTER SYSTEM SET log_min_duration_statement=0;
  *   ALTER SYSTEM SET log_line_prefix='%m [%p] ';  SELECT pg_reload_conf();
- * Condition of record: scripts/audit/seed-augment.sql applied (577 docs/31 users).
+ * Condition of record: SNAPSHOT-PINNED (scripts/audit/snapshot/ship_dev.condition.dump,
+ * restore via scripts/audit/db-restore.sh). Counts read LIVE from the DB at run
+ * time and printed in the raw output header — no hardcoded drift.
  *
  * Method: authenticate (csrf+login, cookie jar), then run 5 user flows, each
  * bracketed by a marker query `SELECT 'AUDIT_MARK_<flow>'`. Pull the container
