@@ -5,134 +5,151 @@
   * { box-sizing: border-box; }
   body { font: 12px/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1a1a1a; margin: 0; }
   h1 { font-size: 22px; margin: 0 0 2px; }
-  h2 { font-size: 15px; margin: 22px 0 4px; padding-bottom: 3px; border-bottom: 2px solid #d62728; color: #b3201b; page-break-after: avoid; }
+  h2 { font-size: 15px; margin: 20px 0 4px; padding-bottom: 3px; border-bottom: 2px solid #d62728; color: #b3201b; page-break-after: avoid; }
   .sub { color: #555; font-size: 11px; margin: 0 0 14px; }
-  .meta { background: #f5f5f5; border-left: 3px solid #888; padding: 8px 12px; font-size: 11px; margin: 10px 0 16px; }
-  .cat { page-break-inside: avoid; margin-bottom: 6px; }
-  .how { font-size: 10.5px; color: #555; margin: 2px 0 6px; }
-  table { border-collapse: collapse; width: 100%; margin: 4px 0 8px; font-size: 10.5px; }
+  .meta { background: #f5f5f5; border-left: 3px solid #888; padding: 8px 12px; font-size: 10.5px; margin: 10px 0 16px; }
+  .cat { page-break-inside: avoid; margin-bottom: 8px; }
+  .how { font-size: 10px; color: #555; margin: 2px 0 5px; }
+  table { border-collapse: collapse; width: 100%; margin: 4px 0 7px; font-size: 10px; }
   th, td { border: 1px solid #ccc; padding: 4px 7px; text-align: left; vertical-align: top; }
   th { background: #f0f0f0; }
+  td.m { width: 27%; font-weight: 600; background: #fafafa; }
   ol { margin: 4px 0 4px 18px; padding: 0; }
-  li { margin: 2px 0; font-size: 11px; }
+  li { margin: 2px 0; font-size: 10.5px; }
   .sev { font-weight: 700; }
   .hi { color: #b3201b; } .med { color: #b06a00; } .lo { color: #2a7a2a; }
-  .pill { display: inline-block; font-size: 9.5px; padding: 1px 6px; border-radius: 8px; background: #eee; color: #333; }
-  .ok { background: #e3f3e3; color: #1f6b1f; }
-  .run { background: #fff3d6; color: #8a5a00; }
-  footer { margin-top: 18px; font-size: 10px; color: #777; border-top: 1px solid #ddd; padding-top: 6px; }
+  .pill { display: inline-block; font-size: 9.5px; padding: 1px 6px; border-radius: 8px; background: #e3f3e3; color: #1f6b1f; }
+  footer { margin-top: 16px; font-size: 10px; color: #777; border-top: 1px solid #ddd; padding-top: 6px; }
+  .note { font-size: 9.5px; color: #777; margin: 2px 0 0; }
 </style></head><body>
 
 <h1>ShipShape Audit — Findings Summary</h1>
-<p class="sub">Phase 1 (Diagnosis) · branch <code>shipshape/audit</code> · generated 2026-05-19 · companion to <code>AUDIT_REPORT.md</code></p>
+<p class="sub">Phase 1 (Diagnosis) · branch <code>shipshape/audit</code> · 7/7 categories baselined · companion to <code>AUDIT_REPORT.md</code> · each table uses the PRD's prescribed metrics per category</p>
 
 <div class="meta">
-<b>Condition of record (all baselines):</b> documents=577, issues=328, sprints=35, users=31 (<code>pnpm db:seed</code> + <code>seed-augment.sql</code>, deterministic). Node v20.20.2 · PostgreSQL 16 (Docker) · macOS aarch64. Every number is produced by a committed re-runnable script in <code>scripts/audit/</code> → raw in <code>docs/audit/raw/</code>. Phase-2 re-runs the same scripts for the before/after comparison.
-<br><b>Data-safety finding:</b> <code>pnpm --filter @ship/api test</code> truncates <code>ship_dev</code> — running unit tests destroys seed data.
+<b>Condition of record (all baselines):</b> documents=577, issues=328, sprints=35, users=31 (<code>pnpm db:seed</code> + <code>seed-augment.sql</code>, deterministic). Node v20.20.2 · PostgreSQL 16 (Docker) · macOS aarch64. Every number is produced by a committed re-runnable script in <code>scripts/audit/</code> → raw in <code>docs/audit/raw/</code>; Phase-2 re-runs the same scripts for before/after. <b>Data-safety:</b> <code>pnpm --filter @ship/api test</code> truncates <code>ship_dev</code>.
 </div>
 
 <div class="cat">
-<h2>1 — Type Safety <span class="pill ok">measured</span></h2>
-<p class="how">TypeScript Compiler API AST walk (no linter exists in repo; <code>strict</code> mode ON). Scope A = non-test src.</p>
-<table><tr><th>Metric</th><th>Baseline</th></tr>
-<tr><td><code>any</code> / <code>as</code> / <code>!</code> / <code>@ts-ignore</code></td><td><b>94 / 433 / 325 / 0</b> = <b>852 total</b> (25% target = 213)</td></tr>
-<tr><td>By package</td><td>api-heavy (<code>!</code> 292), web-heavy (<code>as</code> 298), <code>shared/</code> clean (0)</td></tr>
-<tr><td>Top-dense files</td><td>weeks.ts (84) · projects.ts (51) · issues.ts (48) · UnifiedDocumentPage.tsx (37)</td></tr></table>
+<h2>1 — Type Safety <span class="pill">measured</span></h2>
+<p class="how">TypeScript Compiler API AST walk (no linter in repo; <code>strict</code> ON). Scope A = non-test src. → <code>cat1-type-safety.mjs</code></p>
+<table>
+<tr><td class="m">Total <code>any</code> types</td><td><b>94</b> (api 65 · web 29 · shared 0)</td></tr>
+<tr><td class="m">Total type assertions (<code>as</code>)</td><td><b>433</b> (api 135 · web 298 · shared 0)</td></tr>
+<tr><td class="m">Total non-null assertions (<code>!</code>)</td><td><b>325</b> (api 292 · web 33 · shared 0)</td></tr>
+<tr><td class="m">Total <code>@ts-ignore</code> / <code>@ts-expect-error</code></td><td><b>0</b> (1 in tests only)</td></tr>
+<tr><td class="m">Strict mode enabled?</td><td><b>Yes</b> (strict + noUncheckedIndexedAccess + noImplicitReturns + noFallthroughCasesInSwitch; web tsconfig omits last 3)</td></tr>
+<tr><td class="m">Strict mode error count (if disabled)</td><td>N/A (strict enabled)</td></tr>
+<tr><td class="m">Top 5 violation-dense files</td><td>weeks.ts (84) · projects.ts (51) · issues.ts (48) · UnifiedDocumentPage.tsx (37) · seed.ts (35)</td></tr>
+</table>
+<p class="note">Aggregate = <b>852</b> violations; PRD Improvement Target "eliminate 25%" ⇒ <b>≤ 639</b> (−213).</p>
 <ol>
 <li><span class="sev hi">High</span> — non-null <code>!</code> (325, api 292) is the dominant risk class.</li>
-<li><span class="sev hi">High</span> — <code>as</code> assertions (433, web 298): downstream loss of discriminated-union narrowing.</li>
-<li><span class="sev med">Medium</span> — explicit <code>any</code> (94) concentrated in api routes; <b>no linter</b> guards against new violations.</li>
-<li><span class="sev lo">Honesty correction</span> — orientation's regex undercounted <code>!</code> ~100×; AST number supersedes it.</li>
+<li><span class="sev hi">High</span> — <code>as</code> (433, web 298): downstream loss of discriminated-union narrowing.</li>
+<li><span class="sev med">Medium</span> — explicit <code>any</code> (94) in api routes; <b>no linter</b> guards new violations.</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>2 — Bundle Size <span class="pill ok">measured</span></h2>
-<p class="how">Production <code>vite build --sourcemap</code> + sourcemap byte attribution (no visualizer dep).</p>
-<table><tr><th>Metric</th><th>Baseline</th></tr>
-<tr><td>Total bundle</td><td><b>2,275 KB raw / 695.5 KB gzip</b></td></tr>
-<tr><td>Largest chunk</td><td><code>index-*.js</code> — <b>2,025 KB raw / 575.7 KB gzip = 91.6% of all JS</b></td></tr>
-<tr><td>Heaviest deps</td><td>emoji-picker-react (398 KB) · highlight.js (376 KB) · react-router (347 KB)</td></tr></table>
+<h2>2 — Bundle Size <span class="pill">measured</span></h2>
+<p class="how">Production <code>vite build --sourcemap</code> + sourcemap byte attribution. → <code>cat2-bundle.mjs</code></p>
+<table>
+<tr><td class="m">Total production bundle size</td><td><b>2,275 KB raw / 695.5 KB gzip</b> (JS 2,210 / CSS 65)</td></tr>
+<tr><td class="m">Largest chunk (name + size)</td><td><code>index-C2vAyoQ1.js</code> — <b>2,025 KB raw / 575.7 KB gzip</b></td></tr>
+<tr><td class="m">Number of chunks</td><td>261 JS + 1 CSS — <b>but 91.6% of all JS is in that one chunk</b></td></tr>
+<tr><td class="m">Top 3 largest dependencies</td><td>emoji-picker-react (~398 KB, 7.8%) · highlight.js (~376 KB, 7.4%) · react-router (~347 KB, 6.8%)</td></tr>
+<tr><td class="m">Unused dependencies identified</td><td><code>@tanstack/query-sync-storage-persister</code> (candidate — verify)</td></tr>
+</table>
+<p class="note">Code splitting (PRD "How to Measure"): minimal — 3 <code>React.lazy</code>; tab chunks 1–16 KB; everything else monolithic. PRD Improvement Target = −15% total <i>or</i> −20% initial via splitting.</p>
 <ol>
-<li><span class="sev hi">High</span> — monolithic entry chunk (576 KB gzip, 91.6% of JS); no route/vendor splitting.</li>
+<li><span class="sev hi">High</span> — monolithic entry chunk (576 KB gzip, 91.6% of JS); no route/vendor split.</li>
 <li><span class="sev hi">High</span> — editor-only deps (highlight.js, emoji-picker) ship on first load; lazy-load = large low-risk win.</li>
-<li><span class="sev med">Medium</span> — no <code>manualChunks</code>/vendor split (caching).</li>
-<li><span class="sev lo">Low</span> — candidate dead dep <code>@tanstack/query-sync-storage-persister</code> (verify).</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>3 — API Response Time <span class="pill ok">measured</span></h2>
-<p class="how">Dependency-free concurrent-load harness, API :3000 direct, warmup=10/budget=120/cell @ concurrency 10·25·50.</p>
-<table><tr><th>Endpoint (@conc 25)</th><th>P95</th></tr>
-<tr><td>main page <code>/api/documents?type=wiki</code> (~300 KB)</td><td><b>201 ms</b> (→ 362 ms @50)</td></tr>
-<tr><td>list issues <code>/api/issues</code> (~280 KB, 328 rows)</td><td><b>124 ms</b> (→ 222 ms @50)</td></tr>
-<tr><td>weeks · search · view-document</td><td>≤ 25 ms (genuinely fast)</td></tr></table>
+<h2>3 — API Response Time <span class="pill">measured</span></h2>
+<p class="how">Dependency-free concurrent-load harness, API :3000 direct, warmup=10/budget=120/cell @ concurrency 10·25·50 (headline @25). → <code>cat3-api.mjs</code></p>
+<table>
+<tr><th>Endpoint (key flow) @conc 25</th><th>P50</th><th>P95</th><th>P99</th></tr>
+<tr><td><code>GET /api/documents?document_type=wiki</code> (main page, ~300 KB)</td><td>163ms</td><td><b>201ms</b></td><td>211ms</td></tr>
+<tr><td><code>GET /api/issues</code> (list issues, ~280 KB, 328 rows)</td><td>101ms</td><td><b>124ms</b></td><td>130ms</td></tr>
+<tr><td><code>GET /api/weeks</code> (sprint board)</td><td>20ms</td><td>25ms</td><td>27ms</td></tr>
+<tr><td><code>GET /api/search/mentions?q=load</code> (search)</td><td>16ms</td><td>20ms</td><td>21ms</td></tr>
+<tr><td><code>GET /api/documents/:id</code> (view document)</td><td>18ms</td><td>23ms</td><td>26ms</td></tr>
+</table>
+<p class="note">Concurrency tested 10/25/50, 0 errors all cells. P95 scales ~linearly on the slow two: main_page 100→201→<b>362ms</b>, list_issues 63→124→<b>222ms</b>.</p>
 <ol>
-<li><span class="sev hi">High</span> — two unbounded list endpoints dominate &amp; degrade ~linearly with load; SQL is &lt;1.5 ms so cost = serializing 300/280 KB JSON on the shared event loop. Pagination = target.</li>
-<li><span class="sev med">Medium</span> — global rate limiter <b>100 req/min in prod</b> — very low for a collaborative multi-user app.</li>
-<li><span class="sev med">Medium</span> — per-request session write adds a DB round-trip to every endpoint's latency floor.</li>
+<li><span class="sev hi">High</span> — two unbounded list endpoints dominate &amp; degrade ~linearly; SQL &lt;1.5 ms ⇒ cost = serializing 300/280 KB JSON on the shared event loop.</li>
+<li><span class="sev med">Medium</span> — global rate limiter <b>100 req/min prod</b>; per-request session write on every endpoint.</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>4 — Database Query Efficiency <span class="pill ok">measured</span></h2>
-<p class="how">Postgres full statement logging; 5 marker-bracketed flows, API-pool PIDs only.</p>
-<table><tr><th>Flow</th><th>Queries / slowest / N+1</th></tr>
-<tr><td>main page / view doc / issues / weeks / search</td><td>4–5 queries · &lt;1.5 ms slowest · <b>no N+1</b></td></tr></table>
+<h2>4 — Database Query Efficiency <span class="pill">measured</span></h2>
+<p class="how">Postgres full statement logging; 5 marker-bracketed flows, API-pool PIDs only. → <code>cat4-db.mjs</code></p>
+<table>
+<tr><th>User Flow</th><th>Total Queries</th><th>Slowest (ms)</th><th>N+1?</th></tr>
+<tr><td>Load main page <code>/api/documents?type=wiki</code></td><td>4</td><td>1.419</td><td>No</td></tr>
+<tr><td>View a document <code>/api/documents/:id</code></td><td>4</td><td>0.214</td><td>No</td></tr>
+<tr><td>List issues <code>/api/issues</code></td><td>5</td><td>0.985</td><td>No</td></tr>
+<tr><td>Load sprint board <code>/api/weeks</code></td><td>5</td><td>0.227</td><td>No</td></tr>
+<tr><td>Search content <code>/api/search/mentions</code></td><td>5</td><td>0.433</td><td>No</td></tr>
+</table>
+<p class="note">EXPLAIN: main_page exec 0.144 ms / planning 0.561 ms; purpose-built partial index unused at this volume.</p>
 <ol>
-<li><span class="sev hi">High</span> — universal auth tax: every flow runs <code>SELECT sessions</code> <b>+</b> <code>UPDATE sessions.last_activity</code> — 2 of every 4–5 queries are auth overhead. Throttling the write = −25% queries on a flow.</li>
-<li><span class="sev med">Medium</span> — no pagination/<code>LIMIT</code>; result sets grow linearly with workspace size (hidden at 577, visible at 10×).</li>
-<li><span class="sev lo">Low</span> — well-indexed, no slow query today; gains come from query <i>count</i>, not speed.</li>
+<li><span class="sev hi">High</span> — universal auth tax: every flow runs <code>SELECT sessions</code> <b>+</b> <code>UPDATE sessions.last_activity</code> — 2 of every 4–5 queries are auth overhead.</li>
+<li><span class="sev med">Medium</span> — no pagination/<code>LIMIT</code>; grows linearly with workspace size. <span class="sev lo">Low</span> — well-indexed, no N+1.</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>5 — Test Coverage &amp; Quality <span class="pill ok">measured</span></h2>
-<p class="how">Unit run 3× for flakiness; E2E static catalog; coverage attempted.</p>
-<table><tr><th>Metric</th><th>Baseline</th></tr>
-<tr><td>Unit (api)</td><td><b>451 / 451 pass</b>, 0 flaky over 3 runs, ~16 s — healthy</td></tr>
-<tr><td>E2E</td><td>~882 tests / 71 specs — <b>not runnable</b> by sanctioned method</td></tr>
-<tr><td>Coverage %</td><td><b>Unmeasurable as-shipped</b> (api: <code>@vitest/coverage-v8</code> not installed; web: no config)</td></tr></table>
+<h2>5 — Test Coverage &amp; Quality <span class="pill">measured</span></h2>
+<p class="how">Unit run 3× for flakiness; E2E static catalog; coverage attempted. → <code>docs/audit/raw/cat5-before.txt</code></p>
+<table>
+<tr><td class="m">Total tests</td><td><b>451 unit</b> (api, 28 files) + <b>~882 E2E</b> across 71 spec files (static count)</td></tr>
+<tr><td class="m">Pass / Fail / Flaky</td><td><b>unit: 451 / 0 / 0</b> (3 runs identical — stable). <b>E2E: not obtainable</b></td></tr>
+<tr><td class="m">Suite runtime</td><td>unit: ~15–16 s (16/15/16). E2E: not obtainable</td></tr>
+<tr><td class="m">Critical flows with zero coverage</td><td>document CRUD via HTTP, auth, real-time Yjs collaboration; 16 web unit files never run by <code>pnpm test</code></td></tr>
+<tr><td class="m">Code coverage % (if measured)</td><td>web: <b>n/a</b> (no coverage config) / api: <b>n/a</b> (<code>@vitest/coverage-v8</code> not installed) — <b>unmeasurable as-shipped</b></td></tr>
+</table>
 <ol>
-<li><span class="sev hi">High</span> — the mandated <code>/e2e-test-runner</code> skill <b>does not exist</b> in the repo; the only sanctioned way to run the 882-test suite is unimplemented.</li>
-<li><span class="sev hi">High</span> — coverage unmeasurable as-shipped (tooling absent).</li>
-<li><span class="sev med">Medium</span> — <code>pnpm test</code> runs only api unit; 16 web unit files silently excluded. Doc undercount (~10×).</li>
-<li><span class="sev lo">Positive</span> — the unit layer itself is stable &amp; fast.</li>
+<li><span class="sev hi">High</span> — mandated <code>/e2e-test-runner</code> skill <b>does not exist</b>; 882-test suite unrunnable by sanctioned method.</li>
+<li><span class="sev hi">High</span> — coverage unmeasurable as-shipped. <span class="sev lo">Positive</span> — unit layer stable &amp; fast.</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>6 — Runtime Errors &amp; Edge Cases <span class="pill ok">measured</span></h2>
-<p class="how">Reproducible Playwright harness: console scan · malformed input · RT1 collab durability (validated instrument + online control + API-verified) · slow-3G · PG error-log scan.</p>
-<table><tr><th>Probe</th><th>Result</th></tr>
-<tr><td>Normal use (6 pages)</td><td><b>0</b> console/page/network/5xx errors — clean</td></tr>
-<tr><td>Bad UUID path param</td><td><b>500</b> + raw Postgres error (unvalidated → DB error)</td></tr>
-<tr><td>Bad JSON / missing CSRF</td><td><b>HTML stack-trace pages</b> (info leak, inconsistent contract)</td></tr>
-<tr><td>Wrong Content-Type body</td><td><b>201</b> — silently creates a default doc</td></tr>
-<tr><td>RT1 collab durability</td><td><b>PERSISTED</b> — offline path robust (y-indexeddb + replay)</td></tr></table>
+<h2>6 — Runtime Errors &amp; Edge Cases <span class="pill">measured</span></h2>
+<p class="how">Reproducible Playwright harness: console · malformed input · RT1 collab (validated control) · slow-3G · PG log. → <code>cat6-runtime.mjs</code></p>
+<table>
+<tr><td class="m">Console errors during normal usage</td><td><b>0</b> across all 6 pages (0 console.error / pageerror / failed req / ≥500)</td></tr>
+<tr><td class="m">Unhandled promise rejections (server)</td><td>Not directly observable (<b>no centralized API logging</b>); proxy: 1 Postgres ERROR (the bad-UUID 500); 0 browser 5xx in normal nav</td></tr>
+<tr><td class="m">Network disconnect recovery</td><td><b>Pass</b> — online control PERSISTED; transient disconnect (tab open) PERSISTED; Yjs IndexedDB offline store present</td></tr>
+<tr><td class="m">Missing error boundaries</td><td>None triggered in normal use (0 pageerrors); fault-injection not exercised this pass</td></tr>
+<tr><td class="m">Silent failures identified</td><td><code>text/plain</code> body → <b>201</b> creates a default doc; + RT1/RT3 server-side swallowed persist</td></tr>
+</table>
+<p class="note">Malformed-input matrix: bad JSON → 400 HTML stack page · missing CSRF → 403 HTML stack · oversized title → 400 clean JSON ✅ · wrong content-type → 201 ⚠️ · bad UUID path → 500 + raw PG error ⚠️</p>
 <ol>
-<li><span class="sev hi">High</span> — unvalidated path params surface raw DB errors as HTTP 500 (+ minor info disclosure).</li>
-<li><span class="sev hi">High</span> — error responses leak stack traces as HTML; inconsistent error contract API-wide.</li>
-<li><span class="sev med">Medium</span> — no Content-Type enforcement → silent junk-document creation.</li>
-<li><span class="sev med">Medium / honest correction</span> — RT1 <b>empirically downgraded</b>: client offline path is robust; residual risk narrowed to server-side swallowed persist failure only.</li>
-<li><span class="sev med">Medium</span> — slow-3G first load ≈ 4.9 s (bundle-bound; corroborates Cat 2). No centralized API error logging (observability gap).</li>
+<li><span class="sev hi">High</span> — unvalidated path params → raw DB error as 500; bad-JSON/missing-CSRF leak HTML stack traces (inconsistent contract).</li>
+<li><span class="sev med">Medium</span> — no Content-Type guard (silent doc creation). <b>RT1 honestly downgraded</b>: client offline path robust; residual = server-side swallowed persist.</li>
 </ol>
 </div>
 
 <div class="cat">
-<h2>7 — Accessibility <span class="pill ok">measured</span></h2>
-<p class="how">axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark harness across the same 6 pages. Instrument validated by an unauthenticated <b>login control</b> (0 violations, 4/4 keyboard).</p>
-<table><tr><th>Probe</th><th>Result</th></tr>
-<tr><td>axe Critical / Serious</td><td><b>2 / 17</b> node instances; 3 rules: aria-required-children, listitem, color-contrast</td></tr>
-<tr><td>Keyboard nav (authenticated)</td><td><b>Broken</b> — only <b>3 distinct</b> focusable in 60 Tabs vs 4/4 control, despite 369–1017 interactive els</td></tr>
-<tr><td>Color contrast</td><td><b>15</b> AA failures on <code>/my-week</code> (low-opacity muted text)</td></tr>
-<tr><td>README "508 / WCAG-AA" claim</td><td><b>CONTRADICTED</b> by the evidence above</td></tr></table>
+<h2>7 — Accessibility <span class="pill">measured</span></h2>
+<p class="how">axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark, validated by an unauthenticated login control. (Lighthouse not a repo dep — axe used; honest substitution.) → <code>cat7-a11y.mjs</code></p>
+<table>
+<tr><td class="m">Lighthouse accessibility score (per page)</td><td><i>Lighthouse not a repo dep — axe-core substituted (honest)</i>: violations/passes — login <b>0/23</b> · main_docs <b>2/22</b> · view_document <b>2/22</b> · issues <b>0/21</b> · my_week <b>1/20</b> · team_dir <b>0/20</b></td></tr>
+<tr><td class="m">Total Critical/Serious violations</td><td><b>Critical = 2, Serious = 17</b> node instances (C+S = 19); 3 rules: aria-required-children, listitem, color-contrast</td></tr>
+<tr><td class="m">Keyboard navigation completeness</td><td><b>Broken</b> (authenticated) — only <b>3 distinct</b> focusable in 60 Tabs vs <b>4/4</b> login control, despite 369–1017 interactive els</td></tr>
+<tr><td class="m">Color contrast failures</td><td><b>15</b> nodes, all on <code>/my-week</code> (low-opacity muted text) — WCAG 1.4.3 AA</td></tr>
+<tr><td class="m">Missing ARIA labels or roles</td><td>aria-required-children (critical) + listitem (serious) on main_docs &amp; view_document; login lacks main/nav landmarks; lang/title/single-h1 OK ✅</td></tr>
+</table>
+<p class="note"><b>README "Section 508 / WCAG 2.1 AA compliant" claim → CONTRADICTED</b> by the evidence above (automated scan = lower bound).</p>
 <ol>
 <li><span class="sev hi">High</span> — keyboard navigation broken on the authenticated app (WCAG 2.1.1/2.4.3, core 508).</li>
-<li><span class="sev hi">High</span> — README's Section 508 / WCAG 2.1 AA compliance claim is false as shipped (compliance overclaim on a .treasury.gov target).</li>
-<li><span class="sev med">Medium</span> — 15 color-contrast AA failures; critical aria-required-children + listitem structure bugs.</li>
-<li><span class="sev lo">Positive</span> — solid baseline hygiene (lang/title/h1/landmarks, 20–23 axe passes/page); failures are localized.</li>
+<li><span class="sev hi">High</span> — README 508/WCAG-AA claim false as shipped. <span class="sev lo">Positive</span> — baseline hygiene solid; failures localized.</li>
 </ol>
 </div>
 
@@ -144,6 +161,6 @@
 </div>
 
 <footer>
-Phase-1 gate: <b>7 / 7 categories baselined</b>. Full methodology, raw evidence, and the cross-category ranked findings summary (High/Medium/Low + reproduction) live in <code>AUDIT_REPORT.md</code>. No application code was changed during the audit — only reproducible measurement instruments and deterministic test data.
+Phase-1 gate: <b>7 / 7 categories baselined</b>; each table mirrors the PRD's prescribed metrics for that category. Full methodology, raw evidence, and the cross-category ranked findings summary (High/Medium/Low + reproduction) live in <code>AUDIT_REPORT.md</code>. No application code was changed during the audit — only reproducible measurement instruments and deterministic test data.
 </footer>
 </body></html>
