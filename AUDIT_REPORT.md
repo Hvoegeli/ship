@@ -201,4 +201,51 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Ranked Findings Summary (all categories)
 
-_Populated as measurements complete. Severity: High / Medium / Low, with category + reproduction._
+Severity-ranked synthesis across all 7 categories. Each row: the finding, its category, the **committed script that reproduces it** (re-run identically in Phase 2 for before/after), and the measurable Phase-2 lever where the deck specifies one. Full methodology/evidence in the per-category sections above; raw in `docs/audit/raw/`.
+
+**Phase-1 gate: 7 / 7 categories baselined.** Conditions of record fixed (577 docs / 328 issues / 31 users). No application code changed during the audit — only reproducible instruments + deterministic test data.
+
+### High
+
+| # | Finding | Cat | Reproduce | Phase-2 lever |
+|---|---------|-----|-----------|---------------|
+| H1 | Two unbounded list endpoints (`/api/documents?type=wiki` ~300 KB, `/api/issues` ~280 KB) dominate latency and degrade ~linearly with concurrency (P95 201→362 ms, 124→222 ms @25→50). SQL is <1.5 ms → cost is JSON serialization on the shared REST+WS event loop. | 3 | `cat3-api.mjs` | Pagination/`LIMIT` → deck's "≥20% P95 reduction on ≥2 endpoints" |
+| H2 | Universal per-request auth query tax: every flow runs `SELECT sessions` **+** `UPDATE sessions.last_activity` — 2 of every 4–5 queries are auth overhead. | 4 | `cat4-db.mjs` | Throttle the `last_activity` write → deck's "≥20% fewer queries on ≥1 flow" (e.g. view_document 4→3 = −25%) |
+| H3 | Monolithic entry chunk: 2.0 MB raw / **576 KB gzip = 91.6% of all JS**; no route/vendor split; editor-only deps (highlight.js 376 KB, emoji-picker 398 KB) ship on first load. Confirmed user-visible: slow-3G first load ≈ 4.9 s (Cat 6). | 2 | `cat2-bundle.mjs` | Code-split + lazy-load → deck's "≥20% smaller initial bundle" |
+| H4 | Keyboard navigation broken on the authenticated app: 60 Tabs reach only **3 distinct** focusable elements (vs validated **4/4** login control) despite 369–1017 interactive elements. WCAG 2.1.1 / 2.4.3 — core Section 508. | 7 | `cat7-a11y.mjs` | Focus-order fix; manual confirm pass |
+| H5 | Type-safety debt: **852** escape hatches in non-test src (`!` 325, `as` 433, `any` 94) vs 213 target; **no linter** to stop new ones. | 1 | `cat1-type-safety.mjs` | Reduce ≥25% + add `@typescript-eslint` |
+| H6 | The mandated `/e2e-test-runner` skill **does not exist**; the only sanctioned way to run the 882-test E2E suite is unimplemented, and coverage is unmeasurable as-shipped (`@vitest/coverage-v8` absent, web has none). | 5 | `docs/audit/raw/cat5-before.txt` | Implement runner + install coverage tooling |
+| H7 | README claims "Section 508 / WCAG 2.1 AA compliant" — **contradicted**: critical `aria-required-children`, 15 color-contrast AA failures, broken keyboard nav. Compliance overclaim on a `.treasury.gov` target. | 7 | `cat7-a11y.mjs` | Remediate to substantiate (or retract) the claim |
+| H8 | Unvalidated path params surface raw Postgres errors as HTTP **500** (`/api/documents/not-a-uuid`); bad-JSON / missing-CSRF return **HTML stack-trace pages** (info disclosure, inconsistent error contract API-wide). | 6 | `cat6-runtime.mjs` | Input validation + JSON error envelope |
+
+### Medium
+
+| # | Finding | Cat | Reproduce |
+|---|---------|-----|-----------|
+| M1 | Global rate limiter **100 req/min in prod** (per-IP) — very low for a multi-user collaborative app; an availability risk. | 3 | `cat3-api.mjs` |
+| M2 | No pagination/`LIMIT` anywhere — result sets grow linearly with workspace size (hidden at 577 docs, visible at 10×). | 3/4 | `cat3`/`cat4` |
+| M3 | No `Content-Type` enforcement: a `text/plain` body still returns **201** and persists a default document (silent junk-doc creation). | 6 | `cat6-runtime.mjs` |
+| M4 | `color-contrast` AA failures (15 nodes, `/my-week`, low-opacity muted text). | 7 | `cat7-a11y.mjs` |
+| M5 | `aria-required-children` (critical rule) + `listitem` (serious) ARIA/structure bugs on main_docs & view_document. | 7 | `cat7-a11y.mjs` |
+| M6 | `pnpm test` runs only api unit — 16 web unit files silently excluded; docs undercount tests ~10×. | 5 | `cat5-before.txt` |
+| M7 | Running unit tests truncates `ship_dev` (shared `DATABASE_URL`, no isolated unit DB) — destroys dev/seed data. | 5 | observed, documented |
+| M8 | RT1 residual (refined, not the original claim): client offline path is robust (y-indexeddb + replay), but the server-side 2 s-debounced persist still swallows failures, and there is **no centralized API error logging** to detect it. | 6 | `cat6-runtime.mjs` |
+
+### Low / positive (honest scoping — where *not* to spend Phase-2 effort)
+
+| # | Finding | Cat |
+|---|---------|-----|
+| L1 | `shared/` is type-clean (0 violations) — not a Cat-1 lever. | 1 |
+| L2 | Fast endpoints are genuinely fast (view_document/search/weeks P95 <25 ms @25). | 3 |
+| L3 | DB is well-indexed; **no N+1**, no slow query at rubric volume — Cat-4 gains are query *count*, not speed. | 4 |
+| L4 | Unit suite is stable & fast (451/451 ×3, ~16 s). | 5 |
+| L5 | Normal browser use is clean: 0 console/page/network/5xx errors across 6 pages. | 6 |
+| L6 | a11y baseline hygiene is solid (lang/title/single-h1/landmarks, 20–23 axe passes/page) — failures are localized, not pervasive. | 7 |
+
+### Three strongest Phase-2 candidates (map directly to the deck's measurable 20% targets)
+
+1. **H1 — paginate the two heavy list endpoints** → measurable P95 drop on ≥2 endpoints (`cat3-api.mjs` before/after).
+2. **H2 — throttle the per-request `last_activity` write** → measurable query-count drop on ≥1 flow (`cat4-db.mjs` before/after).
+3. **H3 — code-split + lazy-load the editor-only deps** → measurable initial-bundle reduction (`cat2-bundle.mjs` before/after).
+
+Each is independently reproducible, low-blast-radius, and aligned to a quantified rubric target — the recommended Phase-2 scope.
