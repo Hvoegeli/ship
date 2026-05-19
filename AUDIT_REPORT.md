@@ -95,17 +95,22 @@ Concurrency tested: 10 / 25 / 50. **Method note (P1):** hit API `:3000` directly
 
 ## Category 4 — Database Query Efficiency
 
-**How measured:** `log_statement='all'`, 5 flows, EXPLAIN ANALYZE → `scripts/audit/cat4-db.sh`
+**How measured:** Postgres `log_statement='all'` + `log_min_duration_statement=0`; `node scripts/audit/cat4-db.mjs before` authenticates (csrf+login) and runs 5 marker-bracketed flows, counting only API connection-pool PIDs (psql/admin PIDs excluded). Condition of record: 577 docs/328 issues/35 sprints/31 users. Raw: `docs/audit/raw/cat4-before.txt`. Commit `14d8734`.
 
-| User Flow | Total Queries | Slowest Query (ms) | N+1? |
-|-----------|---------------|--------------------|------|
-| Load main page | ___ | ___ms | ___ |
-| View a document | ___ | ___ms | ___ |
-| List issues | ___ | ___ms | ___ |
-| Load sprint board | ___ | ___ms | ___ |
-| Search content | ___ | ___ms | ___ |
+| User Flow | Endpoint | Total Queries | Slowest (ms) | N+1? |
+|-----------|----------|---------------|--------------|------|
+| Load main page | `GET /api/documents?document_type=wiki` (300 KB resp) | 4 | 1.419 | No |
+| View a document | `GET /api/documents/:id` | 4 | 0.214 | No |
+| List issues | `GET /api/issues` (280 KB resp, 328 rows) | 5 | 0.985 | No |
+| Load sprint board | `GET /api/weeks` | 5 | 0.227 | No |
+| Search content | `GET /api/search/mentions?q=load` | 5 | 0.433 | No |
 
-**Weaknesses / opportunities (ranked):** _DM2 (index coverage), RF3 (post-commit loop)_
+**EXPLAIN ANALYZE — slowest query (main_page documents list):** Bitmap Index Scan on `idx_documents_document_type` → Bitmap Heap Scan (filters `workspace_id`/`archived_at`/`deleted_at`) → Sort. **Exec 0.144 ms / Planning 0.561 ms** (planning > execution). The purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` is **not chosen** (low selectivity at this volume).
+
+**Weaknesses / opportunities (ranked):**
+1. **High — universal per-request auth query tax (RF2, now measured).** Every flow runs `SELECT … FROM sessions …` **+** `UPDATE sessions SET last_activity = $1` — **2 of every flow's 4–5 queries are auth overhead**, on every request. Throttling the `last_activity` write (only when stale) cleanly hits the deck's *"20% fewer queries on ≥1 flow"* (e.g., view_document 4→3 = −25%). Strongest Cat-4 improvement target.
+2. **Medium — unbounded result sets / no pagination.** `main_page` (300 KB) and `list_issues` (280 KB, all 328 issues) fetch everything with no `LIMIT`/cursor; query time grows linearly with workspace size (hidden at 577 docs, visible at 10×).
+3. **Low — well-indexed today; no N+1, no slow query.** Honest baseline: at rubric volume the per-query times are <1.5 ms; the `idx_documents_active` partial index is unused (planner picks the simpler type index). Cat-4 gains come from *query count* (#1), not query speed.
 
 ---
 

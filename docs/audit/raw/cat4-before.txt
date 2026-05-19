@@ -1,0 +1,58 @@
+# Cat 4 DB Query Efficiency — before
+commit: 14d873413eee9db53adba662e16df32d4f1ed094
+date: 2026-05-19T14:05:46.367Z
+condition: 577 docs / 328 issues / 35 sprints / 31 users (seed-augment.sql)
+method: marker-bracketed flows; API pool PIDs only (psql/admin PIDs excluded)
+
+flow          | http        | queries | slowest(ms) | N+1?
+main_page     | 200 299910  |       4 |       1.419 | no
+view_document | 200 16039   |       4 |       0.214 | no
+list_issues   | 200 280442  |       5 |       0.985 | no
+sprint_board  | 200 4353    |       5 |       0.227 | no
+search        | 200 1347    |       5 |       0.433 | no
+
+## Slowest statement per flow
+- main_page: 1.419ms  SELECT id, workspace_id, document_type, title, parent_id, position, ticket_number, properties, created_at, updated_at, created_by, visibility FROM documents WHERE workspace_id = $1 AND archived_at IS 
+- view_document: 0.214ms  SELECT d.*, (d.visibility = 'workspace' OR d.created_by = $2 OR (SELECT role FROM workspace_memberships WHERE workspace_id = $3 AND user_id = $2) = 'admin') as can_access FROM documents d WHERE d.id =
+- list_issues: 0.985ms  SELECT d.id, d.title, d.properties, d.ticket_number, d.content, d.created_at, d.updated_at, d.created_by, d.started_at, d.completed_at, d.cancelled_at, d.reopened_at, d.converted_from_id, u.name as as
+- sprint_board: 0.227ms  SELECT d.id, d.title, d.properties, prog_da.related_id as program_id, p.title as program_name, p.properties->>'prefix' as program_prefix, p.properties->>'accountable_id' as program_accountable_id, (SE
+- search: 0.433ms  SELECT id, title, document_type, visibility FROM documents WHERE workspace_id = $1 AND document_type IN ('wiki', 'issue', 'project', 'program') AND deleted_at IS NULL AND title ILIKE $2 AND (visibilit
+
+## Most-repeated query shape per flow (N+1 evidence)
+- main_page:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  UPDATE sessions SET last_activity = ? WHERE id = ?
+- view_document:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  UPDATE sessions SET last_activity = ? WHERE id = ?
+- list_issues:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  UPDATE sessions SET last_activity = ? WHERE id = ?
+- sprint_board:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  UPDATE sessions SET last_activity = ? WHERE id = ?
+- search:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  UPDATE sessions SET last_activity = ? WHERE id = ?
+
+## EXPLAIN (ANALYZE, BUFFERS) — slowest flow query (main_page documents)
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=43.94..44.19 rows=103 width=246) (actual time=0.111..0.116 rows=103 loops=1)
+   Sort Key: "position", created_at
+   Sort Method: quicksort  Memory: 40kB
+   Buffers: shared hit=31
+   ->  Bitmap Heap Scan on documents  (cost=4.95..40.49 rows=103 width=246) (actual time=0.022..0.071 rows=103 loops=1)
+         Recheck Cond: (document_type = 'wiki'::document_type)
+         Filter: ((archived_at IS NULL) AND (deleted_at IS NULL) AND (workspace_id = 'ec3d457e-a2bc-45c6-b1e9-ba2d3c1a9f3c'::uuid))
+         Heap Blocks: exact=24
+         Buffers: shared hit=25
+         ->  Bitmap Index Scan on idx_documents_document_type  (cost=0.00..4.92 rows=103 width=0) (actual time=0.013..0.013 rows=103 loops=1)
+               Index Cond: (document_type = 'wiki'::document_type)
+               Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=354
+ Planning Time: 0.569 ms
+ Execution Time: 0.138 ms
+(16 rows)
+
