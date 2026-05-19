@@ -1,0 +1,56 @@
+# Cat 7 Accessibility — before
+commit: 61aae8a70fbb1e70aed4b2c98a7128d03aa2a475
+date: 2026-05-19T16:29:15.982Z
+condition: 577+ docs / 328 issues / 31 users; web :5173 (dev, StrictMode ON)
+knobs: settle=2500ms tab_budget=60; axe tags=wcag2a+wcag2aa+wcag21a+wcag21aa
+
+## Probe 1 — axe-core WCAG 2.1 A+AA violations per page (by node instances)
+page          | critical | serious | moderate | minor | distinct | passes
+login         |        0 |       0 |        0 |     0 |        0 | 23
+main_docs     |        1 |       1 |        0 |     0 |        2 | 22
+view_document |        1 |       1 |        0 |     0 |        2 | 22
+issues        |        0 |       0 |        0 |     0 |        0 | 21
+my_week       |        0 |      15 |        0 |     0 |        1 | 20
+team_dir      |        0 |       0 |        0 |     0 |        0 | 20
+
+AGGREGATE node instances — critical=2 serious=17 moderate=0 minor=0
+Critical+Serious total = 19; distinct rule ids across pages = 3 (aria-required-children, listitem, color-contrast)
+
+### Top violation rules per page (id, impact, nodes)
+- login:
+- main_docs:
+      1x  [critical]  aria-required-children
+      1x  [serious]  listitem
+- view_document:
+      1x  [critical]  aria-required-children
+      1x  [serious]  listitem
+- issues:
+- my_week:
+     15x  [serious]  color-contrast
+- team_dir:
+
+## Probe 2 — color-contrast (directly tests README 508/WCAG-AA claim)
+- total color-contrast violating nodes across pages: 15
+- my_week: 15 nodes; e.g. .bg-accent\/20.py-0\.5.px-1\.5 | .items-start.gap-2\.5.py-1\.5:nth-child(1) > .text-\[11px\].text-muted\/50.text- | .items-start.gap-2\.5.py-1\.5:nth-child(2) > .text-\[11px\].text-muted\/50.text-
+
+## Probe 3 — keyboard reachability (Tab budget = 60)
+page          | interactiveEls | focusableReached | trapSuspected
+login         |              4 |                4 | false
+main_docs     |            369 |                3 | false
+view_document |             48 |                3 | false
+issues        |           1017 |                3 | false
+my_week       |             26 |                3 | false
+team_dir      |             24 |                3 | false
+
+## Probe 4 — document/landmark basics
+page          | lang | h1 | main | nav | imgs | imgAlt%  | title
+login         |   en |  1 | false | false |    1 |    100% | Ship - Project Management & Documentation
+main_docs     |   en |  1 | true | true |    0 |    100% | Documents | Ship
+view_document |   en |  1 | true | true |    0 |    100% | Ship | Ship
+issues        |   en |  1 | true | true |    0 |    100% | Issues | Ship
+my_week       |   en |  1 | true | true |    0 |    100% | Ship | Ship
+team_dir      |   en |  1 | true | true |    0 |    100% | Team Directory | Ship
+
+Notes: dev build (StrictMode). axe scans the rendered SPA after networkidle
++ settle. Counts are node instances (a single rule can flag many nodes).
+Triage/severity + the README-claim verdict are recorded in AUDIT_REPORT.md.

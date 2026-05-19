@@ -177,17 +177,25 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 7 — Accessibility Compliance
 
-**How measured:** Lighthouse per page, axe-core severities, keyboard, contrast → `scripts/audit/cat7-a11y.sh`
+**How measured:** reproducible harness `node scripts/audit/cat7-a11y.mjs before` (headless Chromium + `@axe-core/playwright`, a repo devDependency). axe-core WCAG 2.1 **A+AA** scan + isolated `color-contrast` + bounded keyboard-reachability (60-Tab budget, unique per-element identity) + landmark/lang/heading basics, across the **same 6 pages Cat 6 used**. **Instrument validated** like Cat-6 RT1: `login` is scanned in a clean *unauthenticated* context and acts as the control — it returns 0 violations and **4/4** keyboard-reachable, proving the counter is sound, so the authenticated-app numbers are real, not artifacts. Raw: `docs/audit/raw/cat7-before.txt`. Commit `61aae8a`. (Caveat: dev build, StrictMode; automated axe detects only ~30–40% of WCAG issues → violation counts are a **lower bound**.)
 
 | Metric | Baseline |
 |--------|----------|
-| Lighthouse a11y score (per page) | ___ |
-| Total Critical/Serious violations | ___ |
-| Keyboard navigation completeness | Full / Partial / Broken |
-| Color contrast failures | ___ |
-| Missing ARIA labels or roles | ___ |
+| axe a11y per page (violations / passes) | login **0 / 23** (clean control) · main_docs **2 / 22** · view_document **2 / 22** · issues **0 / 21** · my_week **1 / 20** · team_dir **0 / 20** |
+| Total Critical/Serious violations | **Critical = 2, Serious = 17** node instances (Critical+Serious = **19**); **3 distinct rules**: `aria-required-children` (critical), `listitem` (serious), `color-contrast` (serious) |
+| Keyboard navigation completeness | **Broken on the authenticated app.** Control login = **4/4** reachable; every authenticated page reaches only **3 distinct** focusable elements in 60 Tabs despite **369 / 48 / 1017 / 26 / 24** interactive elements (no single-element trap — focus cycles among ~3) |
+| Color contrast failures | **15** failing nodes, all on `/my-week` (low-opacity muted text, e.g. `.text-muted/50` on `.bg-accent/20`) — WCAG 1.4.3 AA |
+| Missing ARIA labels or roles | `aria-required-children` (critical) on main_docs & view_document (a role's required child structure is malformed) + `listitem` (serious, list markup not in a `<ul>/<ol>`). Login page lacks `main`/`nav` landmarks; app pages have both. `lang=en`, unique `<title>`, single `<h1>` on all pages ✅ |
 
-**Weaknesses / opportunities (ranked):** _verify the README's 508/WCAG-AA claim_
+**Verdict on the README's "Section 508 / WCAG 2.1 AA compliant" claim — CONTRADICTED.** Automated evidence shows a **critical** `aria-required-children` violation on core app pages, **15** color-contrast (WCAG 1.4.3 AA) failures, `listitem` structure violations, and — most seriously — keyboard traversal reaching only ~3 of hundreds of interactive elements on every authenticated page (WCAG **2.1.1 Keyboard** / **2.4.3 Focus Order**, both core 508 requirements). Only the login page is clean. The blanket compliance claim is **not supported**; the app has good baseline hygiene (lang/title/heading/landmarks, 20–23 axe passes/page) but concrete, reproducible A/AA failures — and automated scanning is a lower bound.
+
+**Weaknesses / opportunities (ranked):**
+1. **High — keyboard navigation is broken on the authenticated app.** Validated harness: 60 Tabs reach only **3 distinct** focusable elements on every authenticated page (vs **4/4** on the clean login control with only 4 elements), despite 369–1017 interactive elements present. WCAG 2.1.1 / 2.4.3 — core Section 508. The single largest a11y gap; recommend a manual confirmation pass, but the control rules out an instrument artifact.
+2. **High — the README's 508 / WCAG 2.1 AA compliance claim is false as shipped.** Documentation overclaim with compliance risk for a `.treasury.gov` deployment; the audit's job was to test it, and the evidence contradicts it (see verdict).
+3. **Medium — `color-contrast` AA failures (15 nodes, `/my-week`).** Low-opacity muted text utility classes; concentrated and fixable (WCAG 1.4.3).
+4. **Medium — `aria-required-children` (critical) + `listitem` (serious) on main_docs & view_document.** ARIA/structure bugs: a composite role is missing required children and list items sit outside a list container — affects screen-reader traversal.
+5. **Low — login page missing `main`/`nav` landmarks** (region navigation), though it is otherwise the cleanest page.
+6. **Positive / scoping — baseline hygiene is solid.** `lang=en`, unique titles, single `<h1>`, app-page `main`+`nav` landmarks, 20–23 axe passes/page. The gap is keyboard + contrast + a few ARIA structure defects, not pervasive — a tractable, well-localized remediation target.
 
 ---
 
