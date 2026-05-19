@@ -1,0 +1,41 @@
+# Cat 2 Bundle Size — before
+commit: fe4b76e855e4cbd90f8ec50bfbb07f92a7f7b876
+date: 2026-05-19T00:36:31.459Z
+build: cd web && VITE_API_URL= npx vite build --sourcemap   (CLI flag only)
+measure: shipped assets only (.js/.css; .map excluded — not browser-loaded)
+
+Total shipped bundle (JS+CSS) : 2275.0 kB raw  /  695.5 kB gzip
+  JS  : 2210.0 kB raw / 682.9 kB gzip   across 261 chunks
+  CSS : 65.0 kB raw / 12.6 kB gzip   across 1 files
+Largest chunk : index-C2vAyoQ1.js  2025.1 kB raw / 575.7 kB gzip
+  -> 91.6% of all JS is in ONE chunk
+
+Top 8 chunks:
+    2025.1 kB raw /  575.7 kB gz  index-C2vAyoQ1.js
+      16.4 kB raw /    5.4 kB gz  ProgramWeeksTab-BzbUWlt4.js
+      12.4 kB raw /    3.6 kB gz  WeekReviewTab-DmxN07T1.js
+       9.5 kB raw /    2.9 kB gz  StandupFeed-BjJLDai5.js
+       8.9 kB raw /    2.4 kB gz  ProjectRetroTab-BV2rvgoM.js
+       6.5 kB raw /    2.3 kB gz  ProjectWeeksTab-oE3MioHn.js
+       4.4 kB raw /    1.5 kB gz  ProgramProjectsTab-eNNvrO8g.js
+       3.6 kB raw /    1.5 kB gz  ProjectDetailsTab-gSyN3jFM.js
+
+Top dependencies in largest chunk (by sourcemap sourcesContent bytes; proxy, mappedTotal=5121kB of source):
+   25.5%     1307.2 kB src  (app source)
+    7.8%      398.4 kB src  emoji-picker-react
+    7.4%      376.4 kB src  highlight.js
+    6.8%      346.7 kB src  react-router
+    5.7%      292.4 kB src  yjs
+    4.6%      236.8 kB src  prosemirror-view
+    3.8%      194.0 kB src  @tiptap/core
+    3.3%      168.5 kB src  lib0
+    2.5%      130.5 kB src  react-dom
+    2.4%      121.2 kB src  prosemirror-model
+    2.0%      101.9 kB src  @dnd-kit/core
+    1.8%       89.8 kB src  prosemirror-tables
+
+Declared web/ deps: 44.  Candidate UNUSED (no import found in web/src or vite.config) — verify before removal:
+  @tanstack/query-sync-storage-persister
+
+Notes: dep attribution uses sourcesContent length (source bytes) as a proxy for
+minified contribution (source-map-explorer-style mapping accuracy not required for ranking).

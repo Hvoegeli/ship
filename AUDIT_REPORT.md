@@ -54,17 +54,23 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 
 ## Category 2 — Bundle Size
 
-**How measured:** _tool + commands_ → `scripts/audit/cat2-bundle.sh`
+**How measured:** `cd web && VITE_API_URL= npx vite build --sourcemap` (CLI flag only — no committed config/lockfile change), then `node scripts/audit/cat2-bundle.mjs before`. Dep attribution = parsing the largest chunk's `.map` `sourcesContent` bytes (proxy; no visualizer dep). Raw: `docs/audit/raw/cat2-before.txt`. Commit `fe4b76e`.
 
 | Metric | Baseline |
 |--------|----------|
-| Total production bundle size | ___ KB |
-| Largest chunk (name + size) | ___ |
-| Number of chunks | ___ |
-| Top 3 largest dependencies | ___ |
-| Unused dependencies identified | ___ |
+| Total production bundle size | **2,275 KB raw / 695.5 KB gzip** (JS 2,210 / CSS 65) |
+| Largest chunk (name + size) | `index-C2vAyoQ1.js` — **2,025 KB raw / 575.7 KB gzip** |
+| Number of chunks | 261 JS + 1 CSS — **but 91.6% of all JS is in that one chunk** |
+| Top 3 largest dependencies | `emoji-picker-react` (~398 KB src, 7.8%) · `highlight.js` (~376 KB, 7.4%) · `react-router` (~347 KB, 6.8%) — then `yjs`, `prosemirror-view`, `@tiptap/core` |
+| Unused dependencies identified | `@tanstack/query-sync-storage-persister` (no import in `web/src`/vite config — candidate, verify) |
+| Code splitting in use? | Minimal — 3 `React.lazy`/dynamic imports; tab chunks 1–16 KB; everything else in the monolith |
 
-**Weaknesses / opportunities (ranked):** _P3 scoping; TBD_
+**Weaknesses / opportunities (ranked):**
+1. **High — monolithic entry chunk (2.0 MB raw / 576 KB gzip, 91.6% of JS).** No vendor/route splitting; entire app + all deps download before first paint. The deck's "20% off initial via code-split" is the natural target.
+2. **High — heavy editor-only deps in the initial bundle.** `highlight.js` (376 KB — likely all languages) and `emoji-picker-react` (398 KB) are only used inside the TipTap editor, yet ship on first load. Lazy-loading both is a large, low-risk initial-bundle reduction.
+3. **Medium — no `manualChunks` / vendor split.** A `react`/`tiptap`/`prosemirror` vendor chunk would improve caching and parallelization.
+4. **Low — candidate dead dependency** `@tanstack/query-sync-storage-persister` (verify against runtime usage before removal — removing functionality doesn't count).
+5. **Scoping (confirms P3):** `shared/` contributes ~0 (type-only) — not a bundle lever.
 
 ---
 
