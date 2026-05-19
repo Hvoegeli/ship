@@ -192,9 +192,9 @@
 
 <div class="cat">
 <h2>7 — Accessibility <span class="pill">measured</span></h2>
-<p class="how">Lighthouse 13 a11y score/page (authed) + axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark, validated by an unauthenticated login control. → <code>cat7-lighthouse.mjs</code> + <code>cat7-a11y.mjs</code>. Note: Lighthouse/axe are automated (~30–40% of WCAG) and do NOT test keyboard traversal — high scores ≠ compliant.</p>
+<p class="how">Lighthouse 13 a11y score/page — <b>3-run median</b>, JSON+HTML committed to <code>reports/a11y/before/</code> (per ShipShape LH guide) — + axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark, validated by an unauthenticated login control. → <code>cat7-lighthouse.mjs</code> + <code>cat7-a11y.mjs</code>. Lighthouse/axe are automated (~30–40% of WCAG) and do NOT test keyboard traversal — high scores ≠ compliant.</p>
 <table>
-<tr><td class="m">Lighthouse accessibility score (per page)</td><td><b>login 98 · main_docs 100 · view_document 91 · issues 100 · my_week 96 · team_dir 100</b> (lowest = view_document 91). Plus axe violations/passes: login 0/23 · main_docs 2/22 · view_document 2/22 · issues 0/21 · my_week 1/20 · team_dir 0/20. <i>Automated scores miss keyboard — see below.</i></td></tr>
+<tr><td class="m">Lighthouse accessibility score (per page)</td><td><b>median of 3 runs: login 98 · main_docs 91 · view_document 91 · issues 100 · my_week 96 · team_dir 100</b> (lowest = 91, main_docs &amp; view_document). Full JSON+HTML in <code>reports/a11y/before/</code>. Plus axe violations/passes: login 0/23 · main_docs 2/22 · view_document 2/22 · issues 0/21 · my_week 1/20 · team_dir 0/20. <i>Automated scores miss keyboard — a 100 is not a victory.</i></td></tr>
 <tr><td class="m">Total Critical/Serious violations</td><td><b>Critical = 2, Serious = 17</b> node instances (C+S = 19); 3 rules: aria-required-children, listitem, color-contrast</td></tr>
 <tr><td class="m">Keyboard navigation completeness</td><td><b>Broken</b> (authenticated) — only <b>3 distinct</b> focusable in 60 Tabs vs <b>4/4</b> login control, despite 369–1017 interactive els</td></tr>
 <tr><td class="m">Color contrast failures</td><td><b>15</b> nodes, all on <code>/my-week</code> (low-opacity muted text) — WCAG 1.4.3 AA</td></tr>

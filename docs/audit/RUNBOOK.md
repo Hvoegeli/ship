@@ -49,7 +49,7 @@ writes raw to `docs/audit/raw/catN-<phase>.txt` and prints the same to stdout.
 | 4 DB Queries | *(prereq #5 first)* `node scripts/audit/cat4-db.mjs before` | `cat4-before.txt` | `7a975a0` |
 | 5 Test Coverage | in-report protocol (`pnpm --filter @ship/api test` ×3) — see Decision #3b | `cat5-before.txt` | `02ae6e8` |
 | 6 Runtime Errors | `node scripts/audit/cat6-runtime.mjs before` (7 probes) | `cat6-before.txt` | `61aae8a` (+ #4b) |
-| 7 Accessibility | `node scripts/audit/cat7-a11y.mjs before` **and** `node scripts/audit/cat7-lighthouse.mjs before` | `cat7-before.txt`, `cat7-lighthouse-before.txt` | `9fe25cd` / `8419aa7` |
+| 7 Accessibility | `node scripts/audit/cat7-a11y.mjs before` **and** `node scripts/audit/cat7-lighthouse.mjs before` (3×/page median; commits JSON+HTML to `reports/a11y/before/`) | `cat7-before.txt`, `cat7-lighthouse-before.txt`, `reports/a11y/before/*.report.{json,html}` | `9fe25cd` / `8419aa7` |
 
 Notes that matter for an exact replay:
 - Cat 3 sleeps 62 s between endpoints (global rate limiter is 100/min prod, 1000/min dev) — full run is slow by design.
@@ -75,6 +75,9 @@ Status: ✅ decided & applied · 🔵 decided, pending work · ❓ OPEN (needs u
 | #3b Cat 5 coverage | configure `@vitest/coverage-v8` + web coverage now, report % | user → (b) | PRD: "if not configured, configure it" | 🔵 in progress |
 | #4b Cat 6 probes | add stored-XSS + concurrent-edit probes | user → (b) | PRD "How to Measure" items | ✅ this commit |
 | #5 timeline | Audit due **Wednesday noon**; early Fri; final Sun | user | the two brief PDFs disagreed; user resolved | ✅ recorded |
+| LH-guide Q1 | Lighthouse: 3 runs/page → **median**; persist JSON+HTML to `reports/a11y/<phase>/` | user → recommended | ShipShape Lighthouse guide mandates it; we'd observed variance (main_docs 100/91/91) | ✅ applied |
+| LH-guide Q2 | Keep the **same 6 pages** as Cat 6/axe (don't expand to editor-active/sprint/search) | user → recommended | apples-to-apples cross-tool comparison | ✅ |
+| LH-guide Q3 | Screen-reader smoke test: A document-gap / B manual VoiceOver / C a11y-tree proxy | **user — OPEN** | explanation given; awaiting choice | ❓ awaiting user |
 | Instrument validations | RT1 online-control; a11y login-control; Probe 7 contiguous-marker fix | me | a green/red result is not trusted until a control proves the instrument | ✅ documented in `AUDIT_REPORT.md` |
 
 ## 5. Chronological commit log (the path)
