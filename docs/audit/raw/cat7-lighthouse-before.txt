@@ -1,0 +1,17 @@
+# Cat 7 Lighthouse Accessibility — before
+commit: f1788b4335cfa01795df6e3f3ce4ac2624c82a85
+date: 2026-05-19T18:57:20.930Z
+condition: 577+ docs / 328 issues / 31 users; web :5173 (dev, StrictMode ON)
+tool: npx lighthouse@13 --only-categories=accessibility --form-factor=desktop (headless)
+
+page          | a11y score | failed audits (top)
+login         |        98  | 1 (landmark-one-main)
+main_docs     |       100  | 0 ()
+view_document |        91  | 2 (aria-required-children, listitem)
+issues        |       100  | 0 ()
+my_week       |        96  | 1 (color-contrast)
+team_dir      |       100  | 0 ()
+
+Lowest-scoring page = 91 (PRD Improvement Target: +10 on the lowest page).
+Notes: dev build (StrictMode). Lighthouse a11y is automated-only (~ same
+coverage class as axe) — cross-read with cat7-a11y.mjs (axe severities).
