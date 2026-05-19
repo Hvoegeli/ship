@@ -16,7 +16,7 @@
 | OS / HW | macOS (Darwin 23.6.0), aarch64 |
 | Dev servers | API `:3000` (direct — never the Vite proxy for measurement), Web `:5173` |
 | Login used by harnesses | `dev@ship.local` / `admin123` (csrf-token → POST /api/auth/login) |
-| Condition of record | `pnpm db:seed` + `scripts/audit/seed-augment.sql` → ≥577 docs / 328 issues / 35 sprints / 31 users. **Caveat:** base `pnpm db:seed` is NOT idempotent; doc count has drifted 577→623 (see Decision #1, OPEN). |
+| Condition of record (**LOCKED, Decision #1b**) | Frozen snapshot `scripts/audit/snapshot/ship_dev.condition.dump` = **627 docs / 328 issues / 35 sprints / 31 users / 625 assoc**. Restore with `bash scripts/audit/db-restore.sh` (validated round-trip). Base `pnpm db:seed` is NOT idempotent (drifted 577→623→627) so the snapshot — not the seed — is the reproducible truth. |
 
 ## 2. One-time prerequisites (tooling only — NOT application code)
 
@@ -25,9 +25,11 @@ the PRD ("write your own seed script", "configure tooling if absent"):
 
 1. `pnpm install`
 2. Start stack so `:3000`/`:5173`/Postgres are up (project dev flow).
-3. Seed to condition of record:
-   `pnpm db:seed` then
-   `docker exec -i ship-postgres-1 psql -U ship -d ship_dev < scripts/audit/seed-augment.sql`
+3. **Restore the locked condition of record** (preferred — exact & reproducible):
+   `bash scripts/audit/db-restore.sh`
+   *(First-time bootstrap only, if regenerating the snapshot from scratch: `pnpm db:seed` →
+   `docker exec -i ship-postgres-1 psql -U ship -d ship_dev < scripts/audit/seed-augment.sql` →
+   `docker exec ship-postgres-1 pg_dump -U ship -d ship_dev -Fc -Z6 -f /tmp/d && docker cp ship-postgres-1:/tmp/d scripts/audit/snapshot/ship_dev.condition.dump`)*
 4. Playwright Chromium (Cat 6/7): `npx playwright install chromium`
 5. Cat 4 only — enable PG statement logging, then revert after:
    `ALTER SYSTEM SET log_statement='all';` `ALTER SYSTEM SET log_min_duration_statement=0;`
@@ -70,7 +72,7 @@ Status: ✅ decided & applied · 🔵 decided, pending work · ❓ OPEN (needs u
 | Unilateral call (corrected) | Cat 7 axe-substituted-for-Lighthouse without asking | me (error) | user flagged; should have asked | ✅ superseded by #2b |
 | Unilateral call (corrected) | Cat 5 coverage "deferred" without asking | me (error) | user flagged; PRD says configure it | 🔵 #3b |
 | Unilateral call (corrected) | Cat 6 dropped 2 PRD methods silently | me (error) | user flagged; plan hid the omission | ✅ superseded by #4b |
-| #1 condition-of-record | snapshot/restore exact dataset **(b)** vs document drift (a) | **user — OPEN** | (b) gives realism *and* causal validity; drift is test noise, not real growth | ❓ awaiting user; do NOT act |
+| #1 condition-of-record | snapshot/restore exact dataset **(b)** | user → (b) | base seed not idempotent; pinning makes the Phase-1 "reproducible" claim literally true | ✅ snapshot committed + `db-restore.sh` validated |
 | #2b Cat 7 Lighthouse | run Lighthouse for real, not axe-only | user → (b) | PRD deliverable literally asks for it | ✅ `8419aa7` |
 | #3b Cat 5 coverage | configure `@vitest/coverage-v8` + web coverage now, report % | user → (b) | PRD: "if not configured, configure it" | 🔵 in progress |
 | #4b Cat 6 probes | add stored-XSS + concurrent-edit probes | user → (b) | PRD "How to Measure" items | ✅ this commit |
@@ -102,6 +104,7 @@ f1788b4  add per-category improvement options to findings-summary
 
 ## 6. Open items
 
-- ❓ **Decision #1** — pin exact dataset (snapshot/restore) vs document drift. Blocks airtight Phase-2 before/after. *Awaiting user.*
-- 🔵 **#3b** — configure coverage tooling, report %, with DB backup/restore around the `pnpm test` run.
+- ✅ **Decision #1b** — DONE: dataset pinned (`scripts/audit/snapshot/ship_dev.condition.dump`), `db-restore.sh` validated.
+- 🔵 **#3b** — configure coverage tooling, report %; run, then `db-restore.sh` (test run truncates ship_dev).
+- ❓ **LH-guide Q3** — screen-reader smoke test (A/B/C): **DEFERRED by user**, revisit before end of today.
 - Phase-2 / final deliverables (not Phase-1 gate): Improvement Documentation, Discovery write-up polish, Demo video, AI Cost Analysis, Social post, Deployed fork.

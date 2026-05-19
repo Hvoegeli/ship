@@ -19,8 +19,9 @@
 | Node / pnpm | v20.20.2 / 10.27.0 (corepack) |
 | DB | PostgreSQL 16 (Docker `ship-postgres-1`), seeded |
 | OS / HW | macOS (Darwin 23.6.0), aarch64 |
-| Seed volume (CONDITION OF RECORD) | **documents=577, issues=328, sprints=35, users=31, associations=625** — `pnpm db:seed` + `scripts/audit/seed-augment.sql` (deterministic; re-run identically for Phase-2 "after"). Meets deck Cat-3 bar (500+ docs / 100+ issues / 20+ users / 10+ sprints). |
-| ⚠️ Data-safety finding | `pnpm --filter @ship/api test` (unit tests) connect to the same `DATABASE_URL` and **truncate `ship_dev`** — running unit tests destroys seed data. Logged as Cat-5 finding. |
+| Seed volume (CONDITION OF RECORD — **snapshot-pinned**) | **documents=627, issues=328, sprints=35, users=31, associations=625.** The exact dataset is frozen as a committed `pg_dump` at `scripts/audit/snapshot/ship_dev.condition.dump`; restore with `bash scripts/audit/db-restore.sh` (verified to round-trip). This is the *exact, reproducible* condition for every volume-sensitive baseline and for Phase-2 before/after. Meets deck Cat-3 bar (500+ docs / 100+ issues / 20+ users / 10+ sprints). |
+| Why pinned (Decision #1b) | The base `pnpm db:seed` is **not idempotent** — doc count drifted 577 → 623 → 627 across the audit, and `pnpm test` truncates `ship_dev`. Documenting a drifting number would make the "reproducible under recorded conditions" claim untrue. The snapshot makes it literally true: anyone can `db-restore.sh` and re-run the harness to reproduce these numbers. Volume-sensitive baselines (Cat 3, Cat 4) are measured against this snapshot; Cat 1/2 are DB-independent (static AST / build artifact); Cat 6/7 measure page structure & error handling and are volume-independent. |
+| ⚠️ Data-safety finding | `pnpm --filter @ship/api test` connects to the same `DATABASE_URL` and **truncates `ship_dev`** — running unit/coverage tests destroys the dataset. Mitigated by `db-restore.sh` (restore after any test run). Logged as Cat-5 finding. |
 
 ---
 
