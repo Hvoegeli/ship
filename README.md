@@ -30,6 +30,7 @@ This fork (`Hvoegeli/ship`, branch [`shipshape/audit`](https://github.com/Hvoege
 | One-page review summary (PDF) | [`docs/audit/findings-summary.pdf`](docs/audit/findings-summary.pdf) |
 | Full audit report (7 categories, methodology + numbers + ranked findings) | [`AUDIT_REPORT.md`](AUDIT_REPORT.md) |
 | Reproducible path + decision log (read this before you re-run anything) | [`docs/audit/RUNBOOK.md`](docs/audit/RUNBOOK.md) |
+| Phase-2 fix playbook (potential fixes per category, mapped to targets + harnesses) | [`docs/audit/REMEDIATION-PLAN.md`](docs/audit/REMEDIATION-PLAN.md) |
 | Pre-audit codebase orientation notes (all 3 phases + synthesis) | [`ORIENTATION_NOTES.md`](ORIENTATION_NOTES.md) |
 | Discovery write-up (3 things learned, with `file:line` + reuse) | [`DISCOVERY.md`](DISCOVERY.md) |
 | Raw evidence (per-category) | [`docs/audit/raw/`](docs/audit/raw/) + [`reports/a11y/before/`](reports/a11y/before/) (12 Lighthouse JSON+HTML) |
