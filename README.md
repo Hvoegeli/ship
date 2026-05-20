@@ -30,7 +30,8 @@ This fork (`Hvoegeli/ship`, branch [`shipshape/audit`](https://github.com/Hvoege
 | One-page review summary (PDF) | [`docs/audit/findings-summary.pdf`](docs/audit/findings-summary.pdf) |
 | Full audit report (7 categories, methodology + numbers + ranked findings) | [`AUDIT_REPORT.md`](AUDIT_REPORT.md) |
 | Reproducible path + decision log (read this before you re-run anything) | [`docs/audit/RUNBOOK.md`](docs/audit/RUNBOOK.md) |
-| Pre-audit codebase orientation notes + Discovery write-up | [`ORIENTATION_NOTES.md`](ORIENTATION_NOTES.md) |
+| Pre-audit codebase orientation notes (all 3 phases + synthesis) | [`ORIENTATION_NOTES.md`](ORIENTATION_NOTES.md) |
+| Discovery write-up (3 things learned, with `file:line` + reuse) | [`DISCOVERY.md`](DISCOVERY.md) |
 | Raw evidence (per-category) | [`docs/audit/raw/`](docs/audit/raw/) + [`reports/a11y/before/`](reports/a11y/before/) (12 Lighthouse JSON+HTML) |
 | Measurement harness (one script per category) | [`scripts/audit/`](scripts/audit/) |
 
@@ -54,7 +55,7 @@ node scripts/audit/cat7-lighthouse.mjs before    # 3-run median; reports → rep
 
 **One honest call-out about the badges above:** the upstream `Section 508` / `WCAG 2.1 AA` badges are **not supported** by this audit's Category 7 evidence — a critical `aria-required-children` and 15 AA color-contrast failures on `/my-week`, plus an auto-opening modal that occludes every authenticated page from keyboard/screen-reader users until dismissed (escapable via `Escape` — *not* an inescapable trap; the underlying page structure is actually sound). Lighthouse scores 91–100 don't disprove the AA failures — automated audits test static markup, not runtime occlusion. See [`AUDIT_REPORT.md` § Category 7](AUDIT_REPORT.md#category-7--accessibility-compliance) for the verdict, the dismissal experiment, and the methodology note.
 
-**Project deadlines (this fork only):** audit due Wed noon · early submission Fri · final Sun.
+**Project deadlines (this fork only):** Wednesday MVP submission due Wed midnight · optional early submission Fri · final Sun.
 
 ---
 
