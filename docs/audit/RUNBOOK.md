@@ -51,7 +51,7 @@ writes raw to `docs/audit/raw/catN-<phase>.txt` and prints the same to stdout.
 | 4 DB Queries | *(prereq #5 first)* `node scripts/audit/cat4-db.mjs before` | `cat4-before.txt` | `7a975a0` |
 | 5 Test Coverage | in-report protocol (`pnpm --filter @ship/api test` ×3) — see Decision #3b | `cat5-before.txt` | `02ae6e8` |
 | 6 Runtime Errors | `node scripts/audit/cat6-runtime.mjs before` (7 probes) | `cat6-before.txt` | `61aae8a` (+ #4b) |
-| 7 Accessibility | `node scripts/audit/cat7-a11y.mjs before` **and** `node scripts/audit/cat7-lighthouse.mjs before` (3×/page median; commits JSON+HTML to `reports/a11y/before/`) | `cat7-before.txt`, `cat7-lighthouse-before.txt`, `reports/a11y/before/*.report.{json,html}` | `9fe25cd` / `8419aa7` |
+| 7 Accessibility | `node scripts/audit/cat7-a11y.mjs before` **and** `node scripts/audit/cat7-lighthouse.mjs before` (3×/page median; commits JSON+HTML to `reports/a11y/before/`) **and** `node scripts/audit/cat7-sr-tree.mjs before` (Q3-C SR-tree proxy via CDP `Accessibility.getFullAXTree`) | `cat7-before.txt`, `cat7-lighthouse-before.txt`, `cat7-sr-before.txt`, `reports/a11y/before/*.report.{json,html}` | `9fe25cd` / `8419aa7` / `cf6a22c` |
 
 Notes that matter for an exact replay:
 - Cat 3 sleeps 62 s between endpoints (global rate limiter is 100/min prod, 1000/min dev) — full run is slow by design.
@@ -79,7 +79,7 @@ Status: ✅ decided & applied · 🔵 decided, pending work · ❓ OPEN (needs u
 | #5 timeline | Audit due **Wednesday noon**; early Fri; final Sun | user | the two brief PDFs disagreed; user resolved | ✅ recorded |
 | LH-guide Q1 | Lighthouse: 3 runs/page → **median**; persist JSON+HTML to `reports/a11y/<phase>/` | user → recommended | ShipShape Lighthouse guide mandates it; we'd observed variance (main_docs 100/91/91) | ✅ applied |
 | LH-guide Q2 | Keep the **same 6 pages** as Cat 6/axe (don't expand to editor-active/sprint/search) | user → recommended | apples-to-apples cross-tool comparison | ✅ |
-| LH-guide Q3 | Screen-reader smoke test: A document-gap / B manual VoiceOver / C a11y-tree proxy | **user — OPEN** | explanation given; awaiting choice | ❓ awaiting user |
+| LH-guide Q3 | Screen-reader smoke test: A document-gap / B manual VoiceOver / **C a11y-tree proxy** / C+B both | user → **C + B** (strongest answer before Wed-noon) | C is reproducible (committed script, fits the pattern of every other Cat); B adds the qualitative SR-flow check automated tools can't substitute for | 🔵 C ✅ committed `cf6a22c` + integrated into AUDIT_REPORT Cat 7 (`0d277b1`); **B = manual VoiceOver walkthrough on 3 pages, operator runs, transcribed inline into AUDIT_REPORT Cat 7 before final submission** |
 | Rough edge #5 | Re-run cat6/cat7/cat7-lighthouse to refresh raw headers (`577+` → snapshot) **(a)** vs leave-as-is with the volume-independent note **(b)** | user → (a) leave as-is | categories are volume-independent (a11y/error-handling don't depend on row count); the AUDIT_REPORT Environment-of-record states this explicitly | ✅ no action; the three raw files (`cat6-before.txt`, `cat7-before.txt`, `cat7-lighthouse-before.txt`) retain their pre-pin headers by design |
 | Instrument validations | RT1 online-control; a11y login-control; Probe 7 contiguous-marker fix | me | a green/red result is not trusted until a control proves the instrument | ✅ documented in `AUDIT_REPORT.md` |
 
@@ -100,12 +100,17 @@ f09871b  cat3 API response-time baseline
 1cb21e4  align findings-summary to PRD deliverable rows
 f1788b4  add per-category improvement options to findings-summary
 8419aa7  #2b cat7 Lighthouse scores added
-<this>   #4b cat6 stored-XSS + concurrent-edit probes; RUNBOOK added
+4b…      #4b cat6 stored-XSS + concurrent-edit probes; RUNBOOK added
+034c246  rough edges #1–#4 + #6 (PDF/links/staleness/RUNBOOK fixes)
+f3ea026  close rough edge #5 in decision log (user chose (a))
+cf6a22c  #Q3-C cat7-sr-tree.mjs harness + raw (SR a11y-tree proxy)
+0d277b1  #Q3-C integrate SR-tree findings into AUDIT_REPORT Cat 7 + Ranked Findings (H4 root cause + new H9)
+<this>   #Q3 RUNBOOK: record C+B decision, add cat7-sr-tree row to repro table, note Q3-B pending manual VoiceOver
 ```
 
 ## 6. Open items
 
 - ✅ **Decision #1b** — DONE: dataset pinned (`scripts/audit/snapshot/ship_dev.condition.dump`), `db-restore.sh` validated.
 - ✅ **#3b** — DONE: coverage tooling configured in api + web; numbers reported in Cat 5; raw in `docs/audit/raw/cat5-before.txt`; two new findings surfaced (test isolation, hidden web failures).
-- ❓ **LH-guide Q3** — screen-reader smoke test (A/B/C): **DEFERRED by user**, revisit before end of today.
+- 🔵 **LH-guide Q3** — screen-reader: **user chose C + B**.  C ✅ committed (`cat7-sr-tree.mjs` + raw + AUDIT_REPORT integration `0d277b1`).  B = manual VoiceOver walkthrough on 3 highest-impact pages (`/login`, `/docs`, `/documents/<wiki-id>`); operator runs it; results transcribed inline to AUDIT_REPORT Cat 7 ("Q3-B" placeholder section) before final submission.
 - Phase-2 / final deliverables (not Phase-1 gate): Improvement Documentation, Discovery write-up polish, Demo video, AI Cost Analysis, Social post, Deployed fork.
