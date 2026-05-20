@@ -167,5 +167,24 @@
 
 ---
 
+## Supplementary fixes — from the deep static review (`S#` findings)
+
+> These came from the full repo read-through (AUDIT_REPORT "Supplementary Findings" section), not the category harnesses. They are *additional* Phase-2 candidates; several **strengthen an existing category's Improvement Target** (noted), others are cross-cutting (security/ops/reproducibility) beyond the brief's 7. Each is documentation-only here — no code changed.
+
+### Strengthens existing category targets
+- **S3 → Cat 4 (strong lever).** Add expression indexes on the hot JSONB filters (`(properties->>'assignee_id') WHERE document_type='issue'`, `'sprint_number'` on sprints, `'state'`, `'owner_id'`). *Measure:* `EXPLAIN ANALYZE` an issue-by-assignee query before/after (seq scan → index scan) — directly serves the brief's "50% improvement on the slowest query." Risk: Low (additive indexes). The cleanest *speed* win to pair with the Cat-4 query-*count* fix (last_activity throttle).
+- **S2 → Cat 4 / Cat 6.** Introduce a shared access filter (or `active_documents` view) bundling visibility + `deleted_at IS NULL AND archived_at IS NULL`; thread through backlinks/dashboard/weeks. *Measure:* trash an assigned issue → confirm it leaves `/api/dashboard` + backlinks. Risk: Med (touches many read paths; needs regression tests).
+- **S4 + S5 → Cat 6 (the "real data-loss" item the brief wants).** Add a SIGTERM shutdown coordinator that force-flushes `pendingSaves` before `pool.end()`; stop swallowing the debounced persist failure (retry + signal client); surface `ApprovalButton`/`useAutoSave` failures via the existing toast pipeline. *Measure:* kill -TERM mid-edit, confirm the last edit persisted; force a 500 on approve, confirm the user sees an error. Risk: Med.
+- **S7 → Cat 2.** Route-level `React.lazy` for the editor page (compounds the emoji/lowlight code-split already planned); replace `QualityAssistant`'s 10 s poll with the editor's existing change signal; virtualize the issues list. *Measure:* `cat2-bundle.mjs` initial-chunk delta. Risk: Med.
+- **S8 + S9 → Cat 1.** Add `deleted_at` to the shared `Document` type; install `@typescript-eslint` and give each package a real `lint` script (turns the no-op into a gate — pairs with the Cat-1 25%-reduction target). *Measure:* `cat1-type-safety.mjs` + `pnpm lint` actually runs. Risk: Low.
+- **S10 → Cat 5.** Convert `// FIXME:` tests to `test.fixme()`; replace the worst `waitForTimeout`/`networkidle` hard-waits with state-based `expect(...).toBeVisible()` waits. *Measure:* re-run the suite 3× for flake delta. Risk: Low.
+
+### Cross-cutting (beyond the 7 — security / ops / reproducibility)
+- **S1 [reproducibility].** Guard migration `033`'s `RENAME VALUE`s (skip if the old enum value is absent) so a fresh DB provisions. *Measure:* drop DB + `migrate.js` exits 0. Risk: Low. **Highest-priority cross-cutting fix** — it's the only one that blocks a clean clone.
+- **S12 [security].** Add a `buster` (user+workspace) to the persisted-cache `persistOptions` and `queryClient.clear()` on logout/workspace-switch. *Measure:* log out → second user sees no prior cache. Risk: Low.
+- **S13 [ops].** Add a GitHub Actions workflow gating `master` on `install --frozen-lockfile` + `type-check` + `test` + build. Risk: Low.
+- **S14 [ops/security].** Multi-stage hermetic prod Dockerfile (build `dist/` in-image), add `USER node` + `HEALTHCHECK`, pin one pnpm version, remove `strict-ssl false`. Risk: Med (deploy-path change — validate in shadow first).
+- **S15 [hygiene].** `git rm` the four `deploy-api-*.zip` bundles + the committed `tfplan`; tighten `.gitignore` globs. Risk: Low (no secrets present — verified).
+
 ### Reproducibility note
 Every "Measure" row runs against the **locked condition of record** (`bash scripts/audit/db-restore.sh` → 627 docs / 328 issues / 35 sprints / 31 users) so the before/after comparison is under identical conditions, satisfying the brief's "identical conditions" rule. Cat-5 coverage is the one exception — it needs a fresh `pnpm db:seed` (api tests aren't isolated from pre-state; see RUNBOOK), then restore the snapshot afterward.

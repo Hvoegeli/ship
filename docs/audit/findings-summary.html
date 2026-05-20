@@ -226,6 +226,16 @@
 <b>(3)</b> lazy-load editor-only deps → smaller initial bundle (<code>cat2-bundle.mjs</code>).
 </div>
 
+<div class="meta" style="border-left-color:#b3201b">
+<b>Supplementary deep static-review findings</b> (full read-through beyond the 7 harnesses — diagnoses by code inspection, each <code>file:line</code>'d &amp; verified; see <code>AUDIT_REPORT.md</code> §Supplementary). Headline:
+<b>S1 [High]</b> migration 033 fails on a fresh DB (clean clone can't provision) ·
+<b>S2 [High]</b> soft-delete leaks — backlinks/dashboard/week-metrics count trashed docs ·
+<b>S3 [High]</b> hot JSONB filters unindexed (10× latent) ·
+<b>S4 [High]</b> SIGTERM drops in-flight Yjs saves (data-loss every deploy) ·
+<b>S12 [Med-High]</b> persisted query cache not identity-scoped (cross-user exposure on shared browser).
+Cross-cutting ops: no CI, non-hermetic/root Docker, committed deploy bundles (no secrets — verified). Positives: strong Terraform/WAF, consistent multi-tenant isolation, parameterized SQL, no secrets in history.
+</div>
+
 <footer>
 Phase-1 gate: <b>7 / 7 categories baselined</b>; each table mirrors the PRD's prescribed metrics, and each category lists improvement <b>options</b> mapped to its PRD Improvement Target. These are audit <i>recommendations</i> (Phase-1 diagnostic output) — <b>no application code was changed</b>; only reproducible measurement instruments + deterministic test data. Full methodology, raw evidence, and the cross-category ranked findings live in <code>AUDIT_REPORT.md</code>. Each recommended fix would be executed and proven before/after with its named <code>scripts/audit/catN-*</code> harness under the fixed condition of record.
 </footer>
