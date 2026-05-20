@@ -232,7 +232,7 @@
 <b>S2 [High]</b> soft-delete leaks — backlinks/dashboard/week-metrics count trashed docs ·
 <b>S3 [High]</b> hot JSONB filters unindexed (10× latent) ·
 <b>S4 [High]</b> SIGTERM drops in-flight Yjs saves (data-loss every deploy) ·
-<b>S12 [Med-High]</b> persisted query cache not identity-scoped (cross-user exposure on shared browser).
+<b>S12 [High]</b> persisted query cache not identity-scoped (cross-user exposure on shared browser).
 Cross-cutting ops: no CI, non-hermetic/root Docker, committed deploy bundles (no secrets — verified). Positives: strong Terraform/WAF, consistent multi-tenant isolation, parameterized SQL, no secrets in history.
 </div>
 

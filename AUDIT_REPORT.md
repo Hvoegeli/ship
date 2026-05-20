@@ -27,7 +27,7 @@
 
 ## Category 1 — Type Safety
 
-**How measured:** `node scripts/audit/cat1-type-safety.mjs before` — **TypeScript Compiler API 5.9.3** AST walk (no regex; `as const` excluded structurally). Raw: `docs/audit/raw/cat1-before.txt`. Reproducible: re-run same script for "after". Repo has **no linter** (no ESLint/@typescript-eslint), so the compiler API is the defensible instrument. `noImplicitAny` is on (via `strict`) → implicit-any is a compile error, not a measurable count; explicit-any is the surface. Baseline commit `44f55d6`.
+**How measured:** `node scripts/audit/cat1-type-safety.mjs before` — **TypeScript Compiler API 5.9.3** AST walk (no regex; `as const` excluded structurally). Raw: `docs/audit/raw/cat1-before.txt`. Reproducible: re-run same script for "after". Repo has **no linter** (no ESLint/@typescript-eslint), so the compiler API is the defensible instrument. `noImplicitAny` is on (via `strict`) → implicit-any is a compile error, not a measurable count; explicit-any is the surface. Baseline commit `fe4b76e`.
 
 **Scope A — non-test `src/` (primary; the 25% target applies here):**
 
@@ -276,6 +276,7 @@ Severity-ranked synthesis across all 7 categories. Each row: the finding, its ca
 | S5 | Client failures masquerade as success — `ApprovalButton`/`useAutoSave` `catch{console.error}` only, bypassing the toast pipeline (failed approval/title-save looks done). | 6 | static review (`ApprovalButton.tsx:101`, `useAutoSave.ts:39`) |
 | S6 | WS broadcast is O(all-connections) per keystroke, no `bufferedAmount` backpressure (10 MB `maxPayload`), no heartbeat (dead sockets pin docs). Won't scale; needs sticky sessions today. | 3/scaling | static review (`collaboration/index.ts:271,604`) |
 | S7 | No route-level code-split (`main.tsx`, all 23 pages eager — the Cat-2 chunk mechanism); `QualityAssistant` polls every 10 s; no list virtualization. | 2 | static review (`main.tsx`, `QualityAssistant.tsx:213`) |
+| S8 | Shared `Document` type omits `deleted_at` (only `archived_at`) though the column exists and drives trash/retention — typed consumers can't reason about trashed state (compounds S2). | 1 | static review (`shared/src/types/document.ts:249`) |
 | S9 | The `lint` script is a **no-op** — `pnpm -r run lint` with no `lint` script and no ESLint installed anywhere; presents the *appearance* of coverage. | 1/5 | static review (`package.json:25`) |
 | S10 | E2E flake surface: **628 `waitForTimeout` hard-waits** across 51 specs, `networkidle` waits in a Yjs app, and known-broken tests as `// FIXME:` comments (run-and-fail, not quarantined). | 5 | static review (`e2e/`, `playwright.config.ts:60`) |
 | S13 | **No CI pipeline** (`.github/` absent) — no automated type-check/test/lint gate before a local-script deploy to prod. | ops | static review |
@@ -292,6 +293,7 @@ Severity-ranked synthesis across all 7 categories. Each row: the finding, its ca
 | L4 | Unit suite is stable & fast (451/451 ×3, ~16 s). | 5 |
 | L5 | Normal browser use is clean: 0 console/page/network/5xx errors across 6 pages. | 6 |
 | L6 | a11y baseline hygiene is solid (lang/title/single-h1/landmarks, 20–23 axe passes/page) — failures are localized, not pervasive. | 7 |
+| S11 | Dead dependency confirmed — `@tanstack/query-sync-storage-persister` has 0 imports in `web/src` (a custom IndexedDB persister is used); confirmed-removable (upgrades the Cat-2 candidate). | 2 |
 
 ### Three strongest Phase-2 candidates (map directly to the deck's measurable 20% targets)
 
