@@ -169,7 +169,7 @@
 
 ## Supplementary fixes — from the deep static review (`S#` findings)
 
-> These came from the full repo read-through (AUDIT_REPORT "Supplementary Findings" section), not the category harnesses. They are *additional* Phase-2 candidates; several **strengthen an existing category's Improvement Target** (noted), others are cross-cutting (security/ops/reproducibility) beyond the brief's 7. Each is documentation-only here — no code changed.
+> These came from the full repo read-through (detailed in [`SUPPLEMENTARY-FINDINGS.md`](SUPPLEMENTARY-FINDINGS.md)), not the category harnesses. They are *additional* Phase-2 candidates; several **strengthen an existing category's Improvement Target** (noted), others are cross-cutting (security/ops/reproducibility) beyond the brief's 7. Each is documentation-only here — no code changed.
 
 ### Strengthens existing category targets
 - **S3 → Cat 4 (strong lever).** Add expression indexes on the hot JSONB filters (`(properties->>'assignee_id') WHERE document_type='issue'`, `'sprint_number'` on sprints, `'state'`, `'owner_id'`). *Measure:* `EXPLAIN ANALYZE` an issue-by-assignee query before/after (seq scan → index scan) — directly serves the brief's "50% improvement on the slowest query." Risk: Low (additive indexes). The cleanest *speed* win to pair with the Cat-4 query-*count* fix (last_activity throttle).
