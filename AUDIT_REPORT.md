@@ -57,7 +57,7 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 
 ## Category 2 — Bundle Size
 
-**How measured:** `cd web && VITE_API_URL= npx vite build --sourcemap` (CLI flag only — no committed config/lockfile change), then `node scripts/audit/cat2-bundle.mjs before`. Dep attribution = parsing the largest chunk's `.map` `sourcesContent` bytes (proxy; no visualizer dep). Raw: `docs/audit/raw/cat2-before.txt`. Commit `fe4b76e`.
+**How measured:** `cd web && VITE_API_URL= npx vite build --sourcemap` (CLI flag only — no committed config/lockfile change), then `node scripts/audit/cat2-bundle.mjs before`. Dep attribution = parsing the largest chunk's `.map` `sourcesContent` bytes (proxy; no visualizer dep). Raw: `docs/audit/raw/cat2-before.txt`. Commit `7f7a5e2`.
 
 | Metric | Baseline |
 |--------|----------|
@@ -79,7 +79,7 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 
 ## Category 3 — API Response Time
 
-**How measured:** dependency-free Node concurrent-load harness (`node scripts/audit/cat3-api.mjs before`) — fixed worker pool, warmup=10, budget=120 req/cell, **API `:3000` direct (no Vite proxy — P1)**. Endpoints = the 5 key flows traced in Cat 4. 62s gap between endpoints so each runs in a fresh rate-limit window. **Condition: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw (full 10/25/50 matrix): `docs/audit/raw/cat3-before.txt`. Commit `7a975a0` (re-baselined on the pinned snapshot, commit `87e919f`).
+**How measured:** dependency-free Node concurrent-load harness (`node scripts/audit/cat3-api.mjs before`) — fixed worker pool, warmup=10, budget=120 req/cell, **API `:3000` direct (no Vite proxy — P1)**. Endpoints = the 5 key flows traced in Cat 4. 62s gap between endpoints so each runs in a fresh rate-limit window. **Condition: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw (full 10/25/50 matrix): `docs/audit/raw/cat3-before.txt`. Commit `f09871b` (re-baselined on the pinned snapshot, commit `87e919f`).
 
 Headline = **concurrency 25** (mid); full 10/25/50 in raw. (Numbers re-measured against the locked snapshot; pattern is identical to the earlier 577-doc run — the two list endpoints dominate and degrade with load.)
 
@@ -103,7 +103,7 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 4 — Database Query Efficiency
 
-**How measured:** Postgres `log_statement='all'` + `log_min_duration_statement=0`; `node scripts/audit/cat4-db.mjs before` authenticates (csrf+login) and runs 5 marker-bracketed flows, counting only API connection-pool PIDs (psql/admin PIDs excluded). **Condition of record: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw: `docs/audit/raw/cat4-before.txt`. Commit `14d8734` (re-baselined on the pinned snapshot, `87e919f`).
+**How measured:** Postgres `log_statement='all'` + `log_min_duration_statement=0`; `node scripts/audit/cat4-db.mjs before` authenticates (csrf+login) and runs 5 marker-bracketed flows, counting only API connection-pool PIDs (psql/admin PIDs excluded). **Condition of record: snapshot-pinned, read live from the DB (627 docs / 328 issues / 35 sprints / 31 users); restore via `scripts/audit/db-restore.sh`.** Raw: `docs/audit/raw/cat4-before.txt`. Commit `7a975a0` (re-baselined on the pinned snapshot, `87e919f`).
 
 | User Flow | Endpoint | Total Queries | Slowest (ms) | N+1? |
 |-----------|----------|---------------|--------------|------|
@@ -124,7 +124,7 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 
 ## Category 5 — Test Coverage and Quality
 
-**How measured:** unit (api) = `pnpm --filter @ship/api test` run **3× for flakiness**; unit (web) = `pnpm --filter @ship/web exec -- vitest run`; E2E = static catalog (full run blocked — see findings); coverage = **configured per PRD instruction** (`@vitest/coverage-v8@4.0.17` added to both packages + `test:coverage` script added to web — Decision #3b). Commits `f09871b` (initial) + #3b follow-up. Raw: `docs/audit/raw/cat5-before.txt`. Coverage JSON: `api/coverage/coverage-summary.json`, `web/coverage/coverage-summary.json`.
+**How measured:** unit (api) = `pnpm --filter @ship/api test` run **3× for flakiness**; unit (web) = `pnpm --filter @ship/web exec -- vitest run`; E2E = static catalog (full run blocked — see findings); coverage = **configured per PRD instruction** (`@vitest/coverage-v8@4.0.17` added to both packages + `test:coverage` script added to web — Decision #3b). Commits `02ae6e8` (initial) + #3b follow-up. Raw: `docs/audit/raw/cat5-before.txt`. Coverage JSON: `api/coverage/coverage-summary.json`, `web/coverage/coverage-summary.json`.
 
 | Metric | Baseline |
 |--------|----------|
@@ -239,7 +239,7 @@ Severity-ranked synthesis across all 7 categories. Each row: the finding, its ca
 
 | # | Finding | Cat | Reproduce | Phase-2 lever |
 |---|---------|-----|-----------|---------------|
-| H1 | Two unbounded list endpoints (`/api/documents?type=wiki` ~300 KB, `/api/issues` ~280 KB) dominate latency and degrade ~linearly with concurrency (P95 201→362 ms, 124→222 ms @25→50). SQL is <1.5 ms → cost is JSON serialization on the shared REST+WS event loop. | 3 | `cat3-api.mjs` | Pagination/`LIMIT` → deck's "≥20% P95 reduction on ≥2 endpoints" |
+| H1 | Two unbounded list endpoints (`/api/documents?type=wiki` ~300 KB, `/api/issues` ~280 KB) dominate latency and degrade ~linearly with concurrency (P95 243→420 ms, 123→229 ms @25→50). SQL is <1.5 ms → cost is JSON serialization on the shared REST+WS event loop. | 3 | `cat3-api.mjs` | Pagination/`LIMIT` → deck's "≥20% P95 reduction on ≥2 endpoints" |
 | H2 | Universal per-request auth query tax: every flow runs `SELECT sessions` **+** `UPDATE sessions.last_activity` — 2 of every 4–5 queries are auth overhead. | 4 | `cat4-db.mjs` | Throttle the `last_activity` write → deck's "≥20% fewer queries on ≥1 flow" (e.g. view_document 4→3 = −25%) |
 | H3 | Monolithic entry chunk: 2.0 MB raw / **576 KB gzip = 91.6% of all JS**; no route/vendor split; editor-only deps (highlight.js 376 KB, emoji-picker 398 KB) ship on first load. Confirmed user-visible: slow-3G first load ≈ 4.9 s (Cat 6). | 2 | `cat2-bundle.mjs` | Code-split + lazy-load → deck's "≥20% smaller initial bundle" |
 | H4 | **Auto-opening modal occludes every authenticated page from keyboard + SR users until dismissed.** The "Post standup for Week 14" modal auto-opens on every authed page load, confines focus to its 3 buttons, and (while open) the SR tree exposes **0 landmarks on 4/6 pages** + only the modal's `h2` (no page `h1`). **Escapable** (`Escape` works → WCAG 2.1.2 passes), and the structure underneath is sound (4 landmarks + proper `h1` once the modal is removed — see Cat 7 §), so it's one localized defect — but it hits every keyboard/SR user on every navigation. *(Corrected from an earlier "inescapable keyboard trap / core 508" overstatement via the Q3-C dismissal experiment.)* | 7 | `cat7-a11y.mjs` + `cat7-sr-tree.mjs` (modal-open vs modal-removed diff) | Don't auto-open / render as `role="status"` aside / proper modal with focus-return; re-prove via SR-tree diff |

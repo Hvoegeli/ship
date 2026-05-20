@@ -15,6 +15,7 @@ Every measurable category has one script here. Each script:
 | cat6-runtime.mjs | 6 Runtime Errors (Playwright browser harness) | done (before) |
 | cat7-a11y.mjs | 7 Accessibility (axe + keyboard, validated control) | done (before) |
 | cat7-lighthouse.mjs | 7 Accessibility (Lighthouse score/page, authed) | done (before) |
+| cat7-sr-tree.mjs | 7 Accessibility (screen-reader a11y-tree proxy via CDP + toast-dismissal experiment, Q3-C) | done (before) |
 
 Run convention: `node scripts/audit/catN-*.mjs <phase>` writes raw output to
 `docs/audit/raw/catN-<phase>.txt` where <phase> = `before` (audit) or `after`

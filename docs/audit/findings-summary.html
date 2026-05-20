@@ -94,13 +94,13 @@
 <p class="how">Dependency-free concurrent-load harness, API :3000 direct, warmup=10/budget=120/cell @ concurrency 10·25·50 (headline @25). → <code>cat3-api.mjs</code></p>
 <table>
 <tr><th>Endpoint (key flow) @conc 25</th><th>P50</th><th>P95</th><th>P99</th></tr>
-<tr><td><code>GET /api/documents?document_type=wiki</code> (main page, ~300 KB)</td><td>163ms</td><td><b>201ms</b></td><td>211ms</td></tr>
-<tr><td><code>GET /api/issues</code> (list issues, ~280 KB, 328 rows)</td><td>101ms</td><td><b>124ms</b></td><td>130ms</td></tr>
-<tr><td><code>GET /api/weeks</code> (sprint board)</td><td>20ms</td><td>25ms</td><td>27ms</td></tr>
-<tr><td><code>GET /api/search/mentions?q=load</code> (search)</td><td>16ms</td><td>20ms</td><td>21ms</td></tr>
-<tr><td><code>GET /api/documents/:id</code> (view document)</td><td>18ms</td><td>23ms</td><td>26ms</td></tr>
+<tr><td><code>GET /api/documents?document_type=wiki</code> (main page, ~300 KB)</td><td>185ms</td><td><b>243ms</b></td><td>254ms</td></tr>
+<tr><td><code>GET /api/issues</code> (list issues, ~280 KB, 328 rows)</td><td>104ms</td><td><b>123ms</b></td><td>143ms</td></tr>
+<tr><td><code>GET /api/weeks</code> (sprint board)</td><td>24ms</td><td>29ms</td><td>30ms</td></tr>
+<tr><td><code>GET /api/search/mentions?q=load</code> (search)</td><td>17ms</td><td>21ms</td><td>22ms</td></tr>
+<tr><td><code>GET /api/documents/:id</code> (view document)</td><td>33ms</td><td>44ms</td><td>48ms</td></tr>
 </table>
-<p class="note">Concurrency tested 10/25/50, 0 errors all cells. P95 scales ~linearly on the slow two: main_page 100→201→<b>362ms</b>, list_issues 63→124→<b>222ms</b>.</p>
+<p class="note">Concurrency tested 10/25/50, 0 errors all cells. P95 scales ~linearly on the slow two: main_page 112→243→<b>420ms</b>, list_issues 69→123→<b>229ms</b> (snapshot-pinned, matches <code>cat3-before.txt</code>).</p>
 <ol>
 <li><span class="sev hi">High</span> — two unbounded list endpoints dominate &amp; degrade ~linearly; SQL &lt;1.5 ms ⇒ cost = serializing 300/280 KB JSON on the shared event loop.</li>
 <li><span class="sev med">Medium</span> — global rate limiter <b>100 req/min prod</b>; per-request session write on every endpoint.</li>
@@ -120,11 +120,11 @@
 <p class="how">Postgres full statement logging; 5 marker-bracketed flows, API-pool PIDs only. → <code>cat4-db.mjs</code></p>
 <table>
 <tr><th>User Flow</th><th>Total Queries</th><th>Slowest (ms)</th><th>N+1?</th></tr>
-<tr><td>Load main page <code>/api/documents?type=wiki</code></td><td>4</td><td>1.419</td><td>No</td></tr>
-<tr><td>View a document <code>/api/documents/:id</code></td><td>4</td><td>0.214</td><td>No</td></tr>
-<tr><td>List issues <code>/api/issues</code></td><td>5</td><td>0.985</td><td>No</td></tr>
-<tr><td>Load sprint board <code>/api/weeks</code></td><td>5</td><td>0.227</td><td>No</td></tr>
-<tr><td>Search content <code>/api/search/mentions</code></td><td>5</td><td>0.433</td><td>No</td></tr>
+<tr><td>Load main page <code>/api/documents?type=wiki</code></td><td>4</td><td>1.61</td><td>No</td></tr>
+<tr><td>View a document <code>/api/documents/:id</code></td><td>4</td><td>0.369</td><td>No</td></tr>
+<tr><td>List issues <code>/api/issues</code></td><td>5</td><td>1.158</td><td>No</td></tr>
+<tr><td>Load sprint board <code>/api/weeks</code></td><td>5</td><td>0.382</td><td>No</td></tr>
+<tr><td>Search content <code>/api/search/mentions</code></td><td>5</td><td>0.470</td><td>No</td></tr>
 </table>
 <p class="note">EXPLAIN: main_page exec 0.144 ms / planning 0.561 ms; purpose-built partial index unused at this volume.</p>
 <ol>
