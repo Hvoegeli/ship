@@ -92,6 +92,11 @@ for (const [key, url] of PAGES) {
     dialogs: 0,
     liveRegions: 0,
     firstTab: [],
+    // Toast-dismissal experiment (Q3-B-substitute, authed pages only):
+    toastSemantics: '',     // role + aria-live of the dialog (is it even announced?)
+    escapeDismisses: null,  // does the app's own Escape close the toast?
+    afterLandmarks: null,   // landmarks revealed once the toast is removed (DOM-only)
+    afterHeadings: null,    // heading outline revealed once the toast is removed
   };
   try {
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
@@ -152,6 +157,51 @@ for (const [key, url] of PAGES) {
         return `${role}: ${String(text).trim().replace(/\s+/g, ' ').slice(0, 60)}`;
       });
       if (desc) r.firstTab.push(desc);
+    }
+
+    // ---- Toast-dismissal experiment (mechanizes the manual VoiceOver checks
+    // that Q3-B would have done by hand; authed pages only). Three questions:
+    //   (a) Is the toast even announced to an SR? (role + aria-live)
+    //   (b) Does the app's own Escape dismiss it? (keyboard operability)
+    //   (c) What page outline is HIDDEN behind it? — remove the dialog +
+    //       clear aria-hidden/inert (DOM-ONLY, no server mutation, no app-code
+    //       change) and re-snapshot. This shows the landmarks/headings the SR
+    //       *would* get if the focus-trap were fixed — i.e. the fix target. ----
+    if (key !== 'login') {
+      r.toastSemantics = await page.evaluate(() => {
+        const d = document.querySelector('[role="dialog"],[role="alertdialog"]');
+        if (!d) return 'no-dialog-found';
+        const role = d.getAttribute('role');
+        const live = d.getAttribute('aria-live')
+          || d.closest('[aria-live]')?.getAttribute('aria-live')
+          || 'none';
+        return `role=${role} aria-live=${live}`;
+      });
+      const hadDialog = (await page.locator('[role="dialog"],[role="alertdialog"]').count()) > 0;
+      await page.keyboard.press('Escape');
+      await sleep(500);
+      const stillThere = (await page.locator('[role="dialog"],[role="alertdialog"]').count()) > 0;
+      r.escapeDismisses = hadDialog ? !stillThere : null;
+
+      // Reveal the outline underneath (DOM-only — does NOT touch the server or
+      // the app source; we never click POST STANDUP / Got it, which could write).
+      await page.evaluate(() => {
+        document.querySelectorAll('[role="dialog"],[role="alertdialog"]').forEach((el) => el.remove());
+        document.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.removeAttribute('aria-hidden'));
+        document.querySelectorAll('[inert]').forEach((el) => el.removeAttribute('inert'));
+      });
+      await sleep(300);
+      const c2 = await page.context().newCDPSession(page);
+      await c2.send('Accessibility.enable');
+      const { nodes: after } = await c2.send('Accessibility.getFullAXTree');
+      await c2.detach().catch(() => {});
+      const flat2 = after.map(normalizeCdpNode).filter((n) => !n.ignored && n.role);
+      r.afterLandmarks = flat2
+        .filter((n) => LANDMARK_ROLES.has(n.role))
+        .map((n) => ({ role: n.role, name: (n.name || '').slice(0, 40) }));
+      r.afterHeadings = flat2
+        .filter((n) => n.role === 'heading')
+        .map((h) => ({ level: h.level || 0, name: (h.name || '').slice(0, 60) }));
     }
   } catch (e) {
     r.err = String(e.message).slice(0, 160);
@@ -214,8 +264,38 @@ for (const [key] of PAGES) {
   r.firstTab.forEach((s, i) => P(`    ${String(i + 1).padStart(2)}. ${s}`));
 }
 P('');
-P('Notes: dev build (StrictMode). Tree snapshot is the same data structure');
-P('a screen reader uses; manual VoiceOver pass (Q3-B) records announcement flow.');
+P('## Toast-dismissal experiment (mechanizes Q3-B manual checks; authed pages)');
+P('Question (a): is the toast announced to an SR? (role + aria-live)');
+P('Question (b): does the app Escape dismiss it? (keyboard operability)');
+P('Question (c): what outline is HIDDEN behind it? (toast removed DOM-only, re-snapshot)');
+P('');
+P('page          | toast semantics             | Escape dismisses? | headings WITH→WITHOUT | landmarks WITH→WITHOUT');
+for (const [key] of PAGES) {
+  const r = results[key];
+  if (r.err || key === 'login') continue;
+  const esc = r.escapeDismisses == null ? 'n/a' : (r.escapeDismisses ? 'YES' : 'NO');
+  const hBefore = r.headings.length;
+  const hAfter = r.afterHeadings == null ? '?' : r.afterHeadings.length;
+  const lBefore = r.landmarks.length;
+  const lAfter = r.afterLandmarks == null ? '?' : r.afterLandmarks.length;
+  P(`${key.padEnd(13)} | ${String(r.toastSemantics).padEnd(27)} | ${esc.padStart(17)} | ${String(hBefore + ' -> ' + hAfter).padStart(21)} | ${String(lBefore + ' -> ' + lAfter).padStart(22)}`);
+}
+P('');
+P('### Page outline REVEALED once the toast is removed (the fix target)');
+for (const [key] of PAGES) {
+  const r = results[key];
+  if (r.err || key === 'login' || !r.afterHeadings) continue;
+  P(`- ${key}:`);
+  P(`    landmarks: ${r.afterLandmarks.map((l) => `${l.role}${l.name ? ':' + l.name : ''}`).join(' / ') || '(still none)'}`);
+  P(`    headings:  ${r.afterHeadings.map((h) => `h${h.level} ${h.name}`).join(' | ') || '(still none)'}`);
+}
+P('');
+P('Notes: dev build (StrictMode). Tree snapshot is the same data structure a');
+P('screen reader uses. The dismissal experiment removes the toast element +');
+P('clears aria-hidden/inert IN THE BROWSER ONLY (no server write, no app-code');
+P('change; POST STANDUP / Got it are never clicked) to reveal the outline the');
+P('toast hides. Manual VoiceOver pass (Q3-B) was attempted and blocked (see');
+P('RUNBOOK); this experiment substitutes its reproducible portion.');
 
 const out = L.join('\n') + '\n';
 const dest = join(ROOT, 'docs', 'audit', 'raw', `cat7-sr-${PHASE}.txt`);

@@ -52,7 +52,7 @@ node scripts/audit/cat7-a11y.mjs before
 node scripts/audit/cat7-lighthouse.mjs before    # 3-run median; reports → reports/a11y/before/
 ```
 
-**One honest call-out about the badges above:** the upstream `Section 508` / `WCAG 2.1 AA` badges are **contradicted** by this audit's Category 7 evidence (broken keyboard navigation on the authenticated app, critical `aria-required-children`, 15 AA color-contrast failures on `/my-week`). Lighthouse scores 91–100 don't disprove that — automated audits don't test keyboard traversal. See [`AUDIT_REPORT.md` § Category 7](AUDIT_REPORT.md#category-7--accessibility-compliance) for the verdict and evidence.
+**One honest call-out about the badges above:** the upstream `Section 508` / `WCAG 2.1 AA` badges are **not supported** by this audit's Category 7 evidence — a critical `aria-required-children` and 15 AA color-contrast failures on `/my-week`, plus an auto-opening modal that occludes every authenticated page from keyboard/screen-reader users until dismissed (escapable via `Escape` — *not* an inescapable trap; the underlying page structure is actually sound). Lighthouse scores 91–100 don't disprove the AA failures — automated audits test static markup, not runtime occlusion. See [`AUDIT_REPORT.md` § Category 7](AUDIT_REPORT.md#category-7--accessibility-compliance) for the verdict, the dismissal experiment, and the methodology note.
 
 **Project deadlines (this fork only):** audit due Wed noon · early submission Fri · final Sun.
 

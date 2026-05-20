@@ -1,6 +1,6 @@
 # Cat 7 SR-tree proxy — before
-commit: f3ea026464bef79d6bce16fafcd461c8a03a4cb6
-date: 2026-05-19T22:34:05.151Z
+commit: 1c5ab283db91df076a4915cdfd59393ae8a3dad9
+date: 2026-05-20T14:37:38.174Z
 condition: documents=627 issues=328 sprints=35 users=31 — snapshot-pinned (scripts/audit/db-restore.sh); web :5173 (dev, StrictMode ON)
 method: Playwright a11y-tree snapshot per page; same 6 pages as cat7-a11y.mjs / cat7-lighthouse.mjs
 knobs: settle=2500ms tab_peek=15
@@ -142,5 +142,38 @@ team_dir      |                   1 |                                      1
     14. button: Got it
     15. button: Close
 
-Notes: dev build (StrictMode). Tree snapshot is the same data structure
-a screen reader uses; manual VoiceOver pass (Q3-B) records announcement flow.
+## Toast-dismissal experiment (mechanizes Q3-B manual checks; authed pages)
+Question (a): is the toast announced to an SR? (role + aria-live)
+Question (b): does the app Escape dismiss it? (keyboard operability)
+Question (c): what outline is HIDDEN behind it? (toast removed DOM-only, re-snapshot)
+
+page          | toast semantics             | Escape dismisses? | headings WITH→WITHOUT | landmarks WITH→WITHOUT
+main_docs     | role=dialog aria-live=none  |               YES |                1 -> 2 |                 0 -> 4
+view_document | role=dialog aria-live=none  |               YES |               1 -> 19 |                 1 -> 4
+issues        | role=dialog aria-live=none  |               YES |                1 -> 2 |                 1 -> 4
+my_week       | role=dialog aria-live=none  |               YES |                1 -> 6 |                 0 -> 4
+team_dir      | role=dialog aria-live=none  |               YES |                1 -> 2 |                 0 -> 4
+
+### Page outline REVEALED once the toast is removed (the fix target)
+- main_docs:
+    landmarks: navigation:Primary navigation / complementary:Document list / main / complementary:Document properties
+    headings:  h2 Docs | h1 Documents
+- view_document:
+    landmarks: navigation:Primary navigation / complementary:Document list / main / complementary:Document properties
+    headings:  h2 Docs | h1 Welcome to Ship DIAGT-1779204254338 | h3 Backlinks | h2 For Developers | h3 Creating an Issue | h3 Moving Issues Through Status | h3 Week Board vs List View | h3 Daily Workflow | h2 For Program Managers | h3 Writing a PRD or Spec | h3 Organizing Programs and Issues | h3 Setting Up a Week | h3 Weekly Plan and Retro Documents | h2 For Executives | h3 Are We On Track? | h3 View by Program or Team | h3 Staff Activity and Accountability | h3 What Shipped Recently? | h2 Get Started Now
+- issues:
+    landmarks: navigation:Primary navigation / complementary:Document list / main / complementary:Document properties
+    headings:  h2 Issues | h1 Issues
+- my_week:
+    landmarks: navigation:Primary navigation / complementary:Document list / main / complementary:Document properties
+    headings:  h2 Dashboard | h1 Week 14 | h2 ASSIGNED PROJECTS | h2 WEEKLY PLAN | h2 WEEKLY RETRO | h2 DAILY UPDATES
+- team_dir:
+    landmarks: navigation:Primary navigation / complementary:Document list / main / complementary:Document properties
+    headings:  h2 Teams | h1 Team Directory
+
+Notes: dev build (StrictMode). Tree snapshot is the same data structure a
+screen reader uses. The dismissal experiment removes the toast element +
+clears aria-hidden/inert IN THE BROWSER ONLY (no server write, no app-code
+change; POST STANDUP / Got it are never clicked) to reveal the outline the
+toast hides. Manual VoiceOver pass (Q3-B) was attempted and blocked (see
+RUNBOOK); this experiment substitutes its reproducible portion.

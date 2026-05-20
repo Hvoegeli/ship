@@ -196,26 +196,25 @@
 <table>
 <tr><td class="m">Lighthouse accessibility score (per page)</td><td><b>median of 3 runs: login 98 · main_docs 91 · view_document 91 · issues 100 · my_week 96 · team_dir 100</b> (lowest = 91, main_docs &amp; view_document). Full JSON+HTML in <code>reports/a11y/before/</code>. Plus axe violations/passes: login 0/23 · main_docs 2/22 · view_document 2/22 · issues 0/21 · my_week 1/20 · team_dir 0/20. <i>Automated scores miss keyboard — a 100 is not a victory.</i></td></tr>
 <tr><td class="m">Total Critical/Serious violations</td><td><b>Critical = 2, Serious = 17</b> node instances (C+S = 19); 3 rules: aria-required-children, listitem, color-contrast</td></tr>
-<tr><td class="m">Keyboard navigation completeness</td><td><b>Broken</b> (authenticated) — only <b>3 distinct</b> focusable in 60 Tabs vs <b>4/4</b> login control. <b>Root cause (SR-tree probe):</b> "Post standup for Week 14" toast traps focus to its 3 buttons on every authed page load.</td></tr>
+<tr><td class="m">Keyboard navigation completeness</td><td>Auto-opening "Post standup for Week 14" modal confines focus to 3 buttons on every authed page (60 Tabs → 3 reachable vs 4/4 login). <b>But <code>Escape</code> dismisses it on all pages → WCAG 2.1.2 No-Keyboard-Trap PASSES</b> (Q3-C dismissal experiment). Defect = the disruptive auto-open pattern, not a broken keyboard.</td></tr>
 <tr><td class="m">Color contrast failures</td><td><b>15</b> nodes, all on <code>/my-week</code> (low-opacity muted text) — WCAG 1.4.3 AA</td></tr>
 <tr><td class="m">Missing ARIA labels or roles</td><td>aria-required-children (critical) + listitem (serious) on main_docs &amp; view_document; login lacks main/nav landmarks; lang/title OK ✅.</td></tr>
-<tr><td class="m"><b>SR a11y-tree (Q3-C)</b> — landmarks &amp; headings the SR user sees</td><td><b>4 of 6 pages expose ZERO landmarks</b> (no banner/nav/main/contentinfo). Every authed page exposes <b>only one heading</b> to the SR (h2 "Action Items" — the modal toast); <b>no page-level h1 reaches the SR</b>. Positive: <b>0 unnamed interactives</b> across all pages ✅.</td></tr>
+<tr><td class="m"><b>SR a11y-tree — modal OPEN vs DISMISSED (Q3-C)</b></td><td><b>Modal open (default):</b> 4/6 pages expose ZERO landmarks; only the modal's <code>h2</code> reaches the SR (no page h1). <b>Modal removed (DOM-only):</b> every page exposes <b>4 landmarks</b> (nav/main/2× complementary) + a proper <b>h1</b> (view_document = 19 headings). <b>⇒ structure is sound; the auto-modal occludes it.</b> Positive: <b>0 unnamed interactives</b> anywhere ✅.</td></tr>
 </table>
-<p class="note"><b>README "Section 508 / WCAG 2.1 AA compliant" claim → CONTRADICTED</b> by all three harnesses (automated scan = lower bound). Manual VoiceOver pass (Q3-B) recorded inline in <code>AUDIT_REPORT.md</code> Cat 7 before final submission.</p>
+<p class="note"><b>README "Section 508 / WCAG 2.1 AA compliant" claim → NOT SUPPORTED</b> — on the <b>15 color-contrast AA failures + critical aria-required-children</b> (both independent of the modal). <i>Correction: an earlier draft called the modal an "inescapable keyboard trap / core 508"; the Q3-C dismissal experiment showed it is escapable — severity reframed below.</i> Manual VoiceOver (Q3-B) attempted &amp; blocked; its reproducible part is automated, qualitative flow flagged as Phase-2.</p>
 <ol>
-<li><span class="sev hi">High</span> — keyboard navigation broken on the authenticated app (root cause: focus-trap toast). WCAG 2.1.1/2.4.3, core 508.</li>
-<li><span class="sev hi">High</span> — SR-navigability gap (Q3-C): 4/6 pages have zero landmarks, no page-level h1 reaches the SR on any authed page.</li>
-<li><span class="sev hi">High</span> — README 508/WCAG-AA claim false as shipped. <span class="sev lo">Positive</span> — baseline hygiene solid (0 unnamed interactives); failures localized to toast + my-week contrast + ARIA structure.</li>
+<li><span class="sev hi">High</span> — auto-opening modal occludes every authed page from keyboard/SR users until <code>Escape</code> (escapable, but hits every navigation; one localized defect).</li>
+<li><span class="sev lo">Positive</span> — underlying a11y structure is good: 4 landmarks + proper h1 per page (modal-removed), 0 unnamed interactives.</li>
+<li><span class="sev hi">High</span> — README 508/WCAG-AA claim not supported (15 contrast AA + critical aria-required-children, independent of the modal).</li>
 </ol>
 <div class="imp"><span class="t">▸ Improve</span> — PRD target: +10 Lighthouse on lowest page <i>or</i> fix <b>all Critical/Serious</b> on the 3 most important pages. (Lowest = view_document <b>91</b>; +10 = 101 &gt; max 100, so the "fix all C/S" path is the realistic one.)
 <ul>
-<li><b>A</b> <span class="tag M">M</span> fix all Critical/Serious on main_docs · view_document · my_week: <code>aria-required-children</code>, <code>listitem</code> structure, 15 <code>color-contrast</code> nodes (proven by both <code>cat7-a11y</code> + <code>cat7-lighthouse</code>).</li>
-<li><b>B</b> <span class="tag H">H</span> demote the "Post standup" toast: remove focus trap, give it <code>role="status"</code> (or proper <code>role="dialog" aria-modal="true"</code> + Escape-to-dismiss); fixes BOTH the keyboard ceiling and the broken SR heading outline (proven by <code>cat7-a11y</code> + <code>cat7-sr-tree</code>).</li>
-<li><b>C</b> <span class="tag M">M</span> ensure every page renders a <code>&lt;main&gt;</code> with its own <code>&lt;h1&gt;</code> reachable to the a11y tree (the toast currently obscures the page outline for SR users).</li>
-<li><b>D</b> <span class="tag L">L</span> contrast-only quick win: raise <code>.text-muted/*</code> token to clear 4.5:1 (removes 15 serious, +Lighthouse on my_week).</li>
-<li><b>E</b> <span class="tag M">M</span> add LHCI to CI so the Lighthouse metric stays measurable over time.</li>
+<li><b>A</b> <span class="tag H">H</span> stop the modal auto-opening (or render as a non-focus-stealing <code>role="status"</code> aside; if modal, return focus on close + don't reopen per-navigation) — fixes the occlusion; <code>cat7-sr-tree</code> modal-open vs removed diff re-proves it.</li>
+<li><b>B</b> <span class="tag M">M</span> fix all Critical/Serious on main_docs · view_document · my_week: <code>aria-required-children</code>, <code>listitem</code> structure, 15 <code>color-contrast</code> nodes (proven by <code>cat7-a11y</code> + <code>cat7-lighthouse</code>).</li>
+<li><b>C</b> <span class="tag L">L</span> contrast-only quick win: raise <code>.text-muted/*</code> token to clear 4.5:1 (removes 15 serious, +Lighthouse on my_week).</li>
+<li><b>D</b> <span class="tag M">M</span> add LHCI to CI so the Lighthouse metric stays measurable over time.</li>
 </ul>
-<span class="rec">Recommended: B + A</span> (B is the highest-leverage single fix — it lifts both keyboard + SR; A is the realistic PRD path, measurable via all three Cat-7 harnesses). Q3-C SR-tree raw → <code>docs/audit/raw/cat7-sr-before.txt</code>.</div>
+<span class="rec">Recommended: A + B</span> (A is the highest-leverage single fix — it un-occludes the sound structure underneath; B is the realistic PRD path, measurable via all three Cat-7 harnesses). Q3-C SR-tree raw → <code>docs/audit/raw/cat7-sr-before.txt</code>.</div>
 </div>
 
 <div class="meta" style="border-left-color:#15603a">
