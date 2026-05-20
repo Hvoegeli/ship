@@ -192,27 +192,30 @@
 
 <div class="cat">
 <h2>7 — Accessibility <span class="pill">measured</span></h2>
-<p class="how">Lighthouse 13 a11y score/page — <b>3-run median</b>, JSON+HTML committed to <code>reports/a11y/before/</code> (per ShipShape LH guide) — + axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark, validated by an unauthenticated login control. → <code>cat7-lighthouse.mjs</code> + <code>cat7-a11y.mjs</code>. Lighthouse/axe are automated (~30–40% of WCAG) and do NOT test keyboard traversal — high scores ≠ compliant.</p>
+<p class="how"><b>THREE harnesses, same 6 pages:</b> Lighthouse 13 a11y (3-run median, JSON+HTML in <code>reports/a11y/before/</code>) + axe-core WCAG 2.1 A+AA + keyboard/contrast/landmark (validated by an unauthenticated login control) + <b>SR-tree proxy</b> via CDP <code>Accessibility.getFullAXTree</code> (Q3-C: same tree VoiceOver/NVDA read from). → <code>cat7-lighthouse.mjs</code> + <code>cat7-a11y.mjs</code> + <code>cat7-sr-tree.mjs</code>. Lighthouse/axe are automated (~30–40% of WCAG) and do NOT test keyboard traversal or SR navigation flow — high scores ≠ compliant.</p>
 <table>
 <tr><td class="m">Lighthouse accessibility score (per page)</td><td><b>median of 3 runs: login 98 · main_docs 91 · view_document 91 · issues 100 · my_week 96 · team_dir 100</b> (lowest = 91, main_docs &amp; view_document). Full JSON+HTML in <code>reports/a11y/before/</code>. Plus axe violations/passes: login 0/23 · main_docs 2/22 · view_document 2/22 · issues 0/21 · my_week 1/20 · team_dir 0/20. <i>Automated scores miss keyboard — a 100 is not a victory.</i></td></tr>
 <tr><td class="m">Total Critical/Serious violations</td><td><b>Critical = 2, Serious = 17</b> node instances (C+S = 19); 3 rules: aria-required-children, listitem, color-contrast</td></tr>
-<tr><td class="m">Keyboard navigation completeness</td><td><b>Broken</b> (authenticated) — only <b>3 distinct</b> focusable in 60 Tabs vs <b>4/4</b> login control, despite 369–1017 interactive els</td></tr>
+<tr><td class="m">Keyboard navigation completeness</td><td><b>Broken</b> (authenticated) — only <b>3 distinct</b> focusable in 60 Tabs vs <b>4/4</b> login control. <b>Root cause (SR-tree probe):</b> "Post standup for Week 14" toast traps focus to its 3 buttons on every authed page load.</td></tr>
 <tr><td class="m">Color contrast failures</td><td><b>15</b> nodes, all on <code>/my-week</code> (low-opacity muted text) — WCAG 1.4.3 AA</td></tr>
-<tr><td class="m">Missing ARIA labels or roles</td><td>aria-required-children (critical) + listitem (serious) on main_docs &amp; view_document; login lacks main/nav landmarks; lang/title/single-h1 OK ✅</td></tr>
+<tr><td class="m">Missing ARIA labels or roles</td><td>aria-required-children (critical) + listitem (serious) on main_docs &amp; view_document; login lacks main/nav landmarks; lang/title OK ✅.</td></tr>
+<tr><td class="m"><b>SR a11y-tree (Q3-C)</b> — landmarks &amp; headings the SR user sees</td><td><b>4 of 6 pages expose ZERO landmarks</b> (no banner/nav/main/contentinfo). Every authed page exposes <b>only one heading</b> to the SR (h2 "Action Items" — the modal toast); <b>no page-level h1 reaches the SR</b>. Positive: <b>0 unnamed interactives</b> across all pages ✅.</td></tr>
 </table>
-<p class="note"><b>README "Section 508 / WCAG 2.1 AA compliant" claim → CONTRADICTED</b> by the evidence above (automated scan = lower bound).</p>
+<p class="note"><b>README "Section 508 / WCAG 2.1 AA compliant" claim → CONTRADICTED</b> by all three harnesses (automated scan = lower bound). Manual VoiceOver pass (Q3-B) recorded inline in <code>AUDIT_REPORT.md</code> Cat 7 before final submission.</p>
 <ol>
-<li><span class="sev hi">High</span> — keyboard navigation broken on the authenticated app (WCAG 2.1.1/2.4.3, core 508).</li>
-<li><span class="sev hi">High</span> — README 508/WCAG-AA claim false as shipped. <span class="sev lo">Positive</span> — baseline hygiene solid; failures localized.</li>
+<li><span class="sev hi">High</span> — keyboard navigation broken on the authenticated app (root cause: focus-trap toast). WCAG 2.1.1/2.4.3, core 508.</li>
+<li><span class="sev hi">High</span> — SR-navigability gap (Q3-C): 4/6 pages have zero landmarks, no page-level h1 reaches the SR on any authed page.</li>
+<li><span class="sev hi">High</span> — README 508/WCAG-AA claim false as shipped. <span class="sev lo">Positive</span> — baseline hygiene solid (0 unnamed interactives); failures localized to toast + my-week contrast + ARIA structure.</li>
 </ol>
 <div class="imp"><span class="t">▸ Improve</span> — PRD target: +10 Lighthouse on lowest page <i>or</i> fix <b>all Critical/Serious</b> on the 3 most important pages. (Lowest = view_document <b>91</b>; +10 = 101 &gt; max 100, so the "fix all C/S" path is the realistic one.)
 <ul>
 <li><b>A</b> <span class="tag M">M</span> fix all Critical/Serious on main_docs · view_document · my_week: <code>aria-required-children</code>, <code>listitem</code> structure, 15 <code>color-contrast</code> nodes (proven by both <code>cat7-a11y</code> + <code>cat7-lighthouse</code>).</li>
-<li><b>B</b> <span class="tag H">H</span> fix authenticated-app keyboard nav (focus order / skip-link / tabbable interactive els) — the headline defect automated scores miss (3 → many reachable).</li>
-<li><b>C</b> <span class="tag L">L</span> contrast-only quick win: raise <code>.text-muted/*</code> token to clear 4.5:1 (removes 15 serious, +Lighthouse on my_week).</li>
-<li><b>D</b> <span class="tag M">M</span> add LHCI to CI so the Lighthouse metric stays measurable over time.</li>
+<li><b>B</b> <span class="tag H">H</span> demote the "Post standup" toast: remove focus trap, give it <code>role="status"</code> (or proper <code>role="dialog" aria-modal="true"</code> + Escape-to-dismiss); fixes BOTH the keyboard ceiling and the broken SR heading outline (proven by <code>cat7-a11y</code> + <code>cat7-sr-tree</code>).</li>
+<li><b>C</b> <span class="tag M">M</span> ensure every page renders a <code>&lt;main&gt;</code> with its own <code>&lt;h1&gt;</code> reachable to the a11y tree (the toast currently obscures the page outline for SR users).</li>
+<li><b>D</b> <span class="tag L">L</span> contrast-only quick win: raise <code>.text-muted/*</code> token to clear 4.5:1 (removes 15 serious, +Lighthouse on my_week).</li>
+<li><b>E</b> <span class="tag M">M</span> add LHCI to CI so the Lighthouse metric stays measurable over time.</li>
 </ul>
-<span class="rec">Recommended: A</span> (matches the realistic PRD path, measurable via both Cat-7 harnesses) <b>+ B</b> as the high-impact stretch.</div>
+<span class="rec">Recommended: B + A</span> (B is the highest-leverage single fix — it lifts both keyboard + SR; A is the realistic PRD path, measurable via all three Cat-7 harnesses). Q3-C SR-tree raw → <code>docs/audit/raw/cat7-sr-before.txt</code>.</div>
 </div>
 
 <div class="meta" style="border-left-color:#15603a">
