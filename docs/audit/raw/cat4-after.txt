@@ -1,0 +1,36 @@
+# Cat 4 DB Query Efficiency — after
+commit: 853d3a2f25e8e9675a1d1f30fbf9e00b21b22d9d
+date: 2026-05-21T17:09:04.600Z
+condition: documents=627 issues=328 sprints=35 users=31 — snapshot-pinned (scripts/audit/db-restore.sh)
+method: marker-bracketed flows; API pool PIDs only (psql/admin PIDs excluded)
+
+flow          | http        | queries | slowest(ms) | N+1?
+main_page     | 200 320418  |       3 |       1.522 | no
+view_document | 200 66053   |       3 |       0.251 | no
+list_issues   | 200 280442  |       4 |       1.053 | no
+sprint_board  | 200 4351    |       4 |       0.376 | no
+search        | 200 1347    |       4 |       0.537 | no
+
+## Slowest statement per flow
+- main_page: 1.522ms  SELECT id, workspace_id, document_type, title, parent_id, position, ticket_number, properties, created_at, updated_at, created_by, visibility FROM documents WHERE workspace_id = $1 AND archived_at IS 
+- view_document: 0.251ms  SELECT d.*, (d.visibility = 'workspace' OR d.created_by = $2 OR (SELECT role FROM workspace_memberships WHERE workspace_id = $3 AND user_id = $2) = 'admin') as can_access FROM documents d WHERE d.id =
+- list_issues: 1.053ms  SELECT d.id, d.title, d.properties, d.ticket_number, d.content, d.created_at, d.updated_at, d.created_by, d.started_at, d.completed_at, d.cancelled_at, d.reopened_at, d.converted_from_id, u.name as as
+- sprint_board: 0.376ms  SELECT d.id, d.title, d.properties, prog_da.related_id as program_id, p.title as program_name, p.properties->>'prefix' as program_prefix, p.properties->>'accountable_id' as program_accountable_id, (SE
+- search: 0.537ms  SELECT id, title, document_type, visibility FROM documents WHERE workspace_id = $1 AND document_type IN ('wiki', 'issue', 'project', 'program') AND deleted_at IS NULL AND title ILIKE $2 AND (visibilit
+
+## Most-repeated query shape per flow (N+1 evidence)
+- main_page:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?
+- view_document:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  SELECT d.*, (d.visibility = ? OR d.created_by = ? OR (SELECT role FROM workspace_membershi
+- list_issues:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?
+- sprint_board:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?
+- search:
+    x1  SELECT s.id, s.user_id, s.workspace_id, s.expires_at, s.last_activity, s.created_at, u.is_
+    x1  SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?
