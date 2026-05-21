@@ -113,3 +113,7 @@ vendor/
 
 # Vite PWA dev artifacts
 web/dev-dist/
+
+# Demo video scripts — local working docs, not committed (per user instruction)
+**/*DEMO-SCRIPT*
+**/*demo-script*
