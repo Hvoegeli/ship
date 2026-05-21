@@ -113,7 +113,48 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 | Load sprint board | `GET /api/weeks` | 5 | 0.382 | No |
 | Search content | `GET /api/search/mentions?q=load` | 5 | 0.470 | No |
 
-**EXPLAIN ANALYZE — slowest query (main_page documents list):** Bitmap Index Scan on `idx_documents_document_type` → Bitmap Heap Scan (filters `workspace_id`/`archived_at`/`deleted_at`) → Sort. **Exec 0.144 ms / Planning 0.561 ms** (planning > execution). The purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` is **not chosen** (low selectivity at this volume).
+**EXPLAIN ANALYZE — the two slowest list queries (plan trees inline, captured against the pinned snapshot).**
+
+*`main_page`* — `GET /api/documents?document_type=wiki` (113 rows returned):
+
+```text
+Sort  (cost=75.91..76.20 rows=113 width=242) (actual time=0.233..0.237 rows=113 loops=1)
+  Sort Key: "position", created_at DESC
+  Sort Method: quicksort  Memory: 42kB
+  ->  Bitmap Heap Scan on documents  (cost=5.03..72.06 rows=113 width=242) (actual time=0.037..0.150 rows=113 loops=1)
+        Recheck Cond: (document_type = 'wiki'::document_type)
+        Filter: ((archived_at IS NULL) AND (deleted_at IS NULL) AND (workspace_id = '81a69640-…'::uuid))
+        Heap Blocks: exact=29
+        ->  Bitmap Index Scan on idx_documents_document_type  (cost=0.00..5.00 rows=113 width=0) (actual time=0.021..0.021 rows=113 loops=1)
+              Index Cond: (document_type = 'wiki'::document_type)
+Planning Time: 1.077 ms
+Execution Time: 0.273 ms
+```
+
+*`list_issues`* — `GET /api/issues` (328 rows, two `LEFT JOIN`s to resolve the assignee):
+
+```text
+Sort  (cost=171.28..172.10 rows=328 width=457) (actual time=0.661..0.673 rows=328 loops=1)
+  Sort Key: (CASE (d.properties ->> 'priority') WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END), d.updated_at DESC
+  Sort Method: quicksort  Memory: 121kB
+  ->  Hash Left Join  (cost=71.25..157.57 rows=328 width=457) (actual time=0.123..0.497 rows=328 loops=1)
+        Hash Cond: ((d.properties ->> 'assignee_id') = (person_doc.properties ->> 'user_id'))
+        ->  Hash Left Join  (cost=1.70..76.12 rows=328 width=468) (actual time=0.066..0.360 rows=328 loops=1)
+              Hash Cond: (((d.properties ->> 'assignee_id'))::uuid = u.id)
+              ->  Seq Scan on documents d  (cost=0.00..73.41 rows=328 width=436) (actual time=0.010..0.212 rows=328 loops=1)
+                    Filter: ((archived_at IS NULL) AND (deleted_at IS NULL) AND (workspace_id = '81a69640-…'::uuid) AND (document_type = 'issue'::document_type))
+                    Rows Removed by Filter: 299
+              ->  Hash  (cost=1.31..1.31 rows=31 width=48) (actual time=0.024..0.024 rows=31 loops=1)
+                    ->  Seq Scan on users u  (cost=0.00..1.31 rows=31 width=48) (actual time=0.012..0.014 rows=31 loops=1)
+        ->  Hash  (cost=68.91..68.91 rows=51 width=142) (actual time=0.047..0.047 rows=51 loops=1)
+              ->  Bitmap Heap Scan on documents person_doc  (cost=4.55..68.91 rows=51 width=142) (actual time=0.012..0.029 rows=51 loops=1)
+                    Recheck Cond: (document_type = 'person'::document_type)
+                    ->  Bitmap Index Scan on idx_documents_document_type  (cost=0.00..4.53 rows=51 width=0) (actual time=0.009..0.009 rows=51 loops=1)
+Planning Time: 1.256 ms
+Execution Time: 0.744 ms
+```
+
+**Read of the plans.** *main_page* picks a `Bitmap Index Scan` on `idx_documents_document_type` — **not** the purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` (too low-selectivity to win at this volume); planning (1.08 ms) actually exceeds execution (0.27 ms). *list_issues* is the more telling plan: the `document_type='issue'` filter falls to a **`Seq Scan` on `documents`** (328 of 627 rows match — `Rows Removed by Filter: 299`), and the assignee resolution is two **`Hash Left Join`s on JSONB `->>` extraction** (`properties->>'assignee_id'`) that **no index covers** — the concrete shape behind finding **S3**. Both still run in well under 1 ms at 627/328 rows, which is why the honest Cat-4 lever is *query count* (the per-request auth write, #1 below) and *payload size* (no pagination, #2), **not** query speed — but the issues `Seq Scan` + unindexed JSONB join is exactly the latent cost that surfaces at 10× volume.
 
 **Weaknesses / opportunities (ranked):**
 1. **High — universal per-request auth query tax (RF2, now measured).** Every flow runs `SELECT … FROM sessions …` **+** `UPDATE sessions SET last_activity = $1` — **2 of every flow's 4–5 queries are auth overhead**, on every request. Throttling the `last_activity` write (only when stale) cleanly hits the deck's *"20% fewer queries on ≥1 flow"* (e.g., view_document 4→3 = −25%). Strongest Cat-4 improvement target.
@@ -242,6 +283,13 @@ Beyond the seven harness-measured categories above, a **full read-through of the
 Severity-ranked synthesis across all 7 categories. Each row: the finding, its category, the **committed script that reproduces it** (re-run identically in Phase 2 for before/after), and the measurable Phase-2 lever where the deck specifies one. **`H#`/`M#`/`L#` rows are harness-measured; `S#` rows are the deep-static-review findings** (full detail + `file:line` + method in the companion [`docs/audit/SUPPLEMENTARY-FINDINGS.md`](docs/audit/SUPPLEMENTARY-FINDINGS.md)) — they're diagnoses by code inspection, several independently reproducible by a one-off query/command as noted. Full methodology/evidence in the per-category sections above; raw in `docs/audit/raw/`.
 
 **Phase-1 gate: 7 / 7 categories baselined.** Condition of record fixed via the committed snapshot (627 docs / 328 issues / 35 sprints / 31 users / 625 assoc; restore via `bash scripts/audit/db-restore.sh`). No application code changed during the audit — only reproducible instruments + deterministic test data.
+
+**Severity criteria (how the findings below are ranked).**
+- **High** — hits a *normal* user flow at realistic volume, breaks a *documented guarantee* (e.g. the README's Section 508 / WCAG AA claim), or risks **data loss**. Broad reach, or certain to bite in production.
+- **Medium** — a real defect with narrower blast radius, or **latent at current volume** (bites at scale or under specific conditions); an availability or quality risk rather than an active failure.
+- **Low / positive** — minor or cosmetic, *or* an honest "this is sound — **not** a Phase-2 lever" scoping note (so effort isn't spent where the system is already healthy).
+
+*(The orientation notes use a separate, setup-specific scale — "High = blocks a new engineer from running the app" — which applies only to the install-deviation register, not to these cross-category findings.)*
 
 ### High
 
