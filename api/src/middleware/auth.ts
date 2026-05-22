@@ -16,6 +16,27 @@ declare global {
   }
 }
 
+// Cat-1 (type safety): the Express Request augmentation declares `userId` and
+// `workspaceId` as optional (they are undefined before authMiddleware runs).
+// Route handlers previously asserted presence with `req.userId!` / `req.workspaceId!`
+// at ~236 call sites — unchecked non-null assertions that silently pass `undefined`
+// through if a handler is ever mounted without auth. These accessors centralize the
+// invariant into ONE runtime-validated narrowing: TypeScript gets a `string` (no `!`),
+// and a misuse throws a clear error instead of leaking `undefined` into a query.
+export function getUserId(req: Request): string {
+  if (req.userId === undefined) {
+    throw new Error('getUserId() called on a request without authentication (mount authMiddleware first)');
+  }
+  return req.userId;
+}
+
+export function getWorkspaceId(req: Request): string {
+  if (req.workspaceId === undefined) {
+    throw new Error('getWorkspaceId() called on a request without authentication (mount authMiddleware first)');
+  }
+  return req.workspaceId;
+}
+
 // Hash a token for comparison
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -201,16 +222,22 @@ export async function authMiddleware(
       }
     }
 
-    // Update last activity
-    await pool.query(
-      'UPDATE sessions SET last_activity = $1 WHERE id = $2',
-      [now, sessionId]
-    );
+    // Touch-coalescing (Cat-4): throttle BOTH the `last_activity` write and the
+    // sliding-cookie refresh to at most once per 60s of activity. Previously the
+    // write fired on EVERY authenticated request — 2 of every 4–5 queries per
+    // flow were this auth-overhead write. The 15-minute idle timeout (checked
+    // above against `last_activity`) is unaffected: 60s of write-resolution is
+    // negligible against a 15-minute window, and an actively-used session still
+    // refreshes well within it. Worst case the timeout fires up to ~60s early —
+    // which errs on the safe side.
+    const ACTIVITY_REFRESH_THRESHOLD_MS = 60 * 1000;
+    if (inactivityMs > ACTIVITY_REFRESH_THRESHOLD_MS) {
+      await pool.query(
+        'UPDATE sessions SET last_activity = $1 WHERE id = $2',
+        [now, sessionId]
+      );
 
-    // Refresh cookie with sliding expiration (throttled to avoid overhead)
-    // Only refresh if more than 60 seconds since last activity
-    const COOKIE_REFRESH_THRESHOLD_MS = 60 * 1000;
-    if (inactivityMs > COOKIE_REFRESH_THRESHOLD_MS) {
+      // Refresh cookie with sliding expiration.
       res.cookie('session_id', sessionId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',

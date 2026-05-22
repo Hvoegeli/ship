@@ -1,0 +1,128 @@
+{
+  "phase": "before",
+  "summary": {
+    "PASS": 12,
+    "WARN": 3,
+    "FAIL": 1
+  },
+  "audit": {
+    "critical": 2,
+    "high": 31,
+    "moderate": 39,
+    "low": 4
+  },
+  "findings": [
+    {
+      "id": "A:/api/documents",
+      "area": "authz",
+      "severity": "high",
+      "status": "PASS",
+      "detail": "unauthenticated GET /api/documents -> 401 (expect 401)"
+    },
+    {
+      "id": "A:/api/issues",
+      "area": "authz",
+      "severity": "high",
+      "status": "PASS",
+      "detail": "unauthenticated GET /api/issues -> 401 (expect 401)"
+    },
+    {
+      "id": "A:/api/dashboard/my-work",
+      "area": "authz",
+      "severity": "high",
+      "status": "PASS",
+      "detail": "unauthenticated GET /api/dashboard/my-work -> 401 (expect 401)"
+    },
+    {
+      "id": "B:httponly",
+      "area": "session",
+      "severity": "high",
+      "status": "PASS",
+      "detail": "session cookie HttpOnly: true"
+    },
+    {
+      "id": "B:samesite",
+      "area": "session",
+      "severity": "medium",
+      "status": "PASS",
+      "detail": "session cookie SameSite=Strict: true (Secure flag is prod-only by design)"
+    },
+    {
+      "id": "C:csrf",
+      "area": "csrf",
+      "severity": "high",
+      "status": "PASS",
+      "detail": "POST without CSRF token -> 403 (expect 403)"
+    },
+    {
+      "id": "D:sqli",
+      "area": "injection",
+      "severity": "critical",
+      "status": "PASS",
+      "detail": "SQLi-style filter -> 200 (expect <500; parameterized)"
+    },
+    {
+      "id": "D:badid",
+      "area": "injection",
+      "severity": "medium",
+      "status": "PASS",
+      "detail": "bad-uuid path -> 400 (expect 400/404, not 500)"
+    },
+    {
+      "id": "E:stack",
+      "area": "infodisclosure",
+      "severity": "medium",
+      "status": "PASS",
+      "detail": "malformed body -> 400; HTML/stack leaked: false"
+    },
+    {
+      "id": "F:hsts",
+      "area": "headers",
+      "severity": "low",
+      "status": "PASS",
+      "detail": "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"
+    },
+    {
+      "id": "F:nosniff",
+      "area": "headers",
+      "severity": "low",
+      "status": "PASS",
+      "detail": "X-Content-Type-Options: nosniff"
+    },
+    {
+      "id": "F:csp",
+      "area": "headers",
+      "severity": "medium",
+      "status": "WARN",
+      "detail": "CSP present: true; script-src 'unsafe-inline': true"
+    },
+    {
+      "id": "G:ratelimit",
+      "area": "availability",
+      "severity": "low",
+      "status": "PASS",
+      "detail": "RateLimit headers present: true"
+    },
+    {
+      "id": "H:cve-critical",
+      "area": "dependencies",
+      "severity": "critical",
+      "status": "FAIL",
+      "detail": "critical CVEs: 2"
+    },
+    {
+      "id": "H:cve-high",
+      "area": "dependencies",
+      "severity": "high",
+      "status": "WARN",
+      "detail": "high CVEs: 31"
+    },
+    {
+      "id": "H:cve-moderate",
+      "area": "dependencies",
+      "severity": "medium",
+      "status": "WARN",
+      "detail": "moderate CVEs: 39"
+    }
+  ]
+}

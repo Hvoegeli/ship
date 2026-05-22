@@ -1,0 +1,41 @@
+# Cat 2 Bundle Size — after
+commit: 22b17728b6a7bd8d3ad19c58c0e64904723f24b4
+date: 2026-05-22T04:17:02.373Z
+build: cd web && VITE_API_URL= npx vite build --sourcemap   (CLI flag only)
+measure: shipped assets only (.js/.css; .map excluded — not browser-loaded)
+
+Total shipped bundle (JS+CSS) : 2275.4 kB raw  /  697.0 kB gzip
+  JS  : 2210.4 kB raw / 684.2 kB gzip   across 265 chunks
+  CSS : 65.0 kB raw / 12.8 kB gzip   across 2 files
+Largest chunk : PropertyRow-DpkhTtBB.js  816.8 kB raw / 255.7 kB gzip
+  -> 37.0% of all JS is in ONE chunk
+
+Top 8 chunks:
+     816.8 kB raw /  255.7 kB gz  PropertyRow-DpkhTtBB.js
+     808.9 kB raw /  222.1 kB gz  index-Ds8Bn3AV.js
+     264.6 kB raw /   62.6 kB gz  EmojiPickerInner-h6OCfcnM.js
+     129.4 kB raw /   34.3 kB gz  UnifiedDocumentPage-o5utQtwY.js
+      16.5 kB raw /    5.5 kB gz  ProgramWeeksTab-CBokhYc-.js
+      12.4 kB raw /    3.6 kB gz  WeekReviewTab-89rrtqW5.js
+       9.5 kB raw /    2.9 kB gz  StandupFeed-SjV_hN7n.js
+       8.9 kB raw /    2.4 kB gz  ProjectRetroTab-DePwoXm8.js
+
+Top dependencies in largest chunk (by sourcemap sourcesContent bytes; proxy, mappedTotal=2476kB of source):
+   15.2%      376.4 kB src  highlight.js
+   11.8%      292.4 kB src  yjs
+    9.6%      236.8 kB src  prosemirror-view
+    8.0%      197.9 kB src  (app source)
+    7.8%      194.0 kB src  @tiptap/core
+    6.8%      168.5 kB src  lib0
+    4.9%      121.2 kB src  prosemirror-model
+    3.6%       89.8 kB src  prosemirror-tables
+    3.2%       80.3 kB src  prosemirror-transform
+    3.2%       80.2 kB src  @tiptap/extension-code-block-lowlight
+    2.9%       72.3 kB src  tippy.js
+    2.7%       67.3 kB src  @popperjs/core
+
+Declared web/ deps: 43.  Candidate UNUSED (no import found in web/src or vite.config) — verify before removal:
+  (none detected)
+
+Notes: dep attribution uses sourcesContent length (source bytes) as a proxy for
+minified contribution (source-map-explorer-style mapping accuracy not required for ranking).

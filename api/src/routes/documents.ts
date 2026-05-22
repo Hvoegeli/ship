@@ -1,14 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/client.js';
 import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, getUserId, getWorkspaceId } from '../middleware/auth.js';
 import { isWorkspaceAdmin } from '../middleware/visibility.js';
+import { validateUuidParam } from '../middleware/errorHandler.js';
 import { handleVisibilityChange, handleDocumentConversion, invalidateDocumentCache, broadcastToUser } from '../collaboration/index.js';
 import { extractHypothesisFromContent, extractSuccessCriteriaFromContent, extractVisionFromContent, extractGoalsFromContent, checkDocumentCompleteness } from '../utils/extractHypothesis.js';
 import { loadContentFromYjsState } from '../utils/yjsConverter.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+
+// Cat-6: reject a non-UUID `:id` path param with a clean 400 before it reaches
+// a DB query (otherwise Postgres raises 22P02 → 500 + server-log ERROR; H8).
+router.param('id', validateUuidParam('id'));
 
 // Check if user can access a document (visibility check)
 async function canAccessDocument(
@@ -94,15 +99,23 @@ const updateDocumentSchema = z.object({
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { type, parent_id } = req.query;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Check if user is admin (admins can see all documents)
     const isAdmin = await isWorkspaceAdmin(userId, workspaceId);
 
+    // Cat-3 slim: the list response intentionally omits the heavy `properties`
+    // JSONB blob (and the flattened scalar copies derived from it below).
+    // Verified all list consumers — the wiki-tree path (Documents.tsx,
+    // documentTree.ts, App.tsx, useUnifiedDocuments) and CommandPalette — read
+    // only structural fields (id/parent_id/position/title/document_type/
+    // visibility/ticket_number). `properties` is fetched on demand via the
+    // single-document endpoint. Pagination was rejected: the wiki tree and
+    // cross-type command-palette search both require the full unbounded set.
     let query = `
       SELECT id, workspace_id, document_type, title, parent_id, position,
-             ticket_number, properties,
+             ticket_number,
              created_at, updated_at, created_by, visibility
       FROM documents
       WHERE workspace_id = $1
@@ -130,23 +143,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     const result = await pool.query(query, params);
 
-    // Extract properties into flat fields for backwards compatibility
-    const documents = result.rows.map(row => {
-      const props = row.properties || {};
-      return {
-        ...row,
-        // Flatten common properties for backwards compatibility
-        state: props.state,
-        priority: props.priority,
-        estimate: props.estimate,
-        assignee_id: props.assignee_id,
-        source: props.source,
-        prefix: props.prefix,
-        color: props.color,
-      };
-    });
-
-    res.json(documents);
+    // No flattening: `properties` is no longer selected (Cat-3 slim), and the
+    // previously-flattened scalar fields had no list consumer (see note above).
+    res.json(result.rows);
   } catch (err) {
     console.error('List documents error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -577,7 +576,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     // Sprint plans clear the "write sprint plan" action item
     // Documents with outcome property linked to sprints clear the "write retro" action item
     if (document_type === 'weekly_plan' || (properties && 'outcome' in properties)) {
-      broadcastToUser(req.userId!, 'accountability:updated', { documentId: newDoc.id, documentType: document_type });
+      broadcastToUser(getUserId(req), 'accountability:updated', { documentId: newDoc.id, documentType: document_type });
     }
 
     res.status(201).json(newDoc);

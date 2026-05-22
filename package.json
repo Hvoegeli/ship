@@ -22,7 +22,7 @@
     "build:api": "pnpm run build:shared && pnpm --filter @ship/api build",
     "build:web": "pnpm run build:shared && pnpm --filter @ship/web build",
     "type-check": "pnpm --recursive run type-check",
-    "lint": "pnpm --recursive run lint",
+    "lint": "eslint api/src web/src shared/src",
     "clean": "pnpm --recursive run clean && rm -rf node_modules",
     "test": "pnpm --filter @ship/api test",
     "test:e2e": "playwright test",
@@ -34,18 +34,31 @@
     "prepare": "husky",
     "postinstall": "git config merge.ours.driver true && (command -v comply >/dev/null 2>&1 || echo '\\n⚠️  comply CLI not installed - pre-commit hooks require it\\n   Install with: pip install comply-cli\\n')"
   },
+  "pnpm": {
+    "//overrides": "Cat-8 security: force patched versions of transitive deps flagged by `pnpm audit`. Selector `pkg@<patched` only rewrites the vulnerable range, leaving compatible installs untouched. Same-major patch bumps (low breakage risk); verified via type-check + tests + web build.",
+    "overrides": {
+      "protobufjs@<7.5.6": ">=7.5.6",
+      "fast-xml-parser@<5.3.6": ">=5.3.6",
+      "path-to-regexp@<0.1.12": ">=0.1.12",
+      "picomatch@<2.3.2": ">=2.3.2",
+      "flatted@<3.4.0": ">=3.4.0",
+      "fast-uri@<3.1.1": ">=3.1.1"
+    }
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.57.0",
     "@testcontainers/postgresql": "^11.11.0",
     "@types/supertest": "^6.0.3",
     "@vitest/ui": "^4.0.16",
+    "eslint": "^9.39.4",
     "get-port": "^7.1.0",
     "husky": "^9.1.7",
     "prettier": "^3.4.2",
     "supertest": "^7.1.4",
     "testcontainers": "^11.11.0",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.59.4",
     "vitest": "^4.0.16"
   }
 }

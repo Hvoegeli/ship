@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, getUserId, getWorkspaceId } from '../middleware/auth.js';
 import {
   logDocumentChange,
   getTimestampUpdates,
@@ -12,9 +12,16 @@ import {
   type BelongsToEntry,
 } from '../utils/document-crud.js';
 import { broadcastToUser } from '../collaboration/index.js';
+import { validateUuidParam } from '../middleware/errorHandler.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+
+// Cat-6: reject a non-UUID `:id` path param with a clean 400 before it reaches
+// a DB query (otherwise Postgres raises 22P02 → 500 + server-log ERROR; H8).
+// Literal routes (/action-items, /by-ticket/:number, /bulk) are registered
+// without an `:id` param, so they are unaffected.
+router.param('id', validateUuidParam('id'));
 
 // BelongsTo entry schema for associations
 const belongsToEntrySchema = z.object({
@@ -115,15 +122,19 @@ function extractIssueFromRow(row: any) {
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { state, priority, assignee_id, program_id, sprint_id, source, parent_filter } = req.query;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
 
+    // Cat-3 slim: the list response intentionally omits `d.content` (the full
+    // TipTap/ProseMirror body). List consumers (web/src/hooks/useIssuesQuery.ts
+    // `Issue` type + all renderers) never read `content` off a list item — the
+    // body is fetched on demand via the single-document endpoint. Dropping it
+    // here removes the dominant JSON-serialization cost from the hot list path.
     let query = `
       SELECT d.id, d.title, d.properties, d.ticket_number,
-             d.content,
              d.created_at, d.updated_at, d.created_by,
              d.started_at, d.completed_at, d.cancelled_at, d.reopened_at,
              d.converted_from_id,
@@ -251,8 +262,8 @@ router.get('/action-items', authMiddleware, async (req: Request, res: Response) 
       return;
     }
 
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get person document ID for the user
     const personResult = await pool.query(
@@ -347,8 +358,8 @@ router.get('/by-ticket/:number', authMiddleware, async (req: Request, res: Respo
       return;
     }
 
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -415,8 +426,8 @@ router.get('/by-ticket/:number', authMiddleware, async (req: Request, res: Respo
 router.get('/:id/children', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -493,8 +504,8 @@ router.get('/:id/children', authMiddleware, async (req: Request, res: Response) 
 router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -587,7 +598,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     // Use advisory lock to serialize ticket number generation per workspace
     // This prevents race conditions where concurrent requests get the same MAX value
     // The lock key is derived from workspace_id (first 15 hex chars as bigint)
-    const workspaceIdHex = req.workspaceId!.replace(/-/g, '').substring(0, 15);
+    const workspaceIdHex = getWorkspaceId(req).replace(/-/g, '').substring(0, 15);
     const lockKey = parseInt(workspaceIdHex, 16);
     await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
 
@@ -648,7 +659,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
       // Broadcast celebration when first issue is added to sprint
       if (issueCount === 1) {
-        broadcastToUser(req.userId!, 'accountability:updated', { type: 'week_issues', targetId: sprintAssoc.id });
+        broadcastToUser(getUserId(req), 'accountability:updated', { type: 'week_issues', targetId: sprintAssoc.id });
       }
     }
 
@@ -676,8 +687,8 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const id = String(req.params.id);
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     const parsed = updateIssueSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -920,7 +931,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     // Log all changes to history (within transaction)
     const automatedBy = data.claude_metadata?.updated_by;
     for (const change of changes) {
-      await logDocumentChange(id!, change.field, change.oldValue, change.newValue, req.userId!, automatedBy, client);
+      await logDocumentChange(id!, change.field, change.oldValue, change.newValue, getUserId(req), automatedBy, client);
     }
 
     // If we have document updates, do the UPDATE
@@ -977,7 +988,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
         const issueCount = parseInt(issueCountResult.rows[0].count, 10);
 
         if (issueCount === 1) {
-          broadcastToUser(req.userId!, 'accountability:updated', { type: 'week_issues', targetId: sprintId });
+          broadcastToUser(getUserId(req), 'accountability:updated', { type: 'week_issues', targetId: sprintId });
         }
       }
     }
@@ -1011,8 +1022,8 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
 router.get('/:id/history', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -1073,8 +1084,8 @@ router.post('/:id/history', authMiddleware, async (req: Request, res: Response) 
       res.status(400).json({ error: 'Issue ID required' });
       return;
     }
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     const parsed = logHistorySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1136,8 +1147,8 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
     }
 
     const { ids, action, updates } = parsed.data;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -1332,8 +1343,8 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
 router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -1379,8 +1390,8 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
 router.post('/:id/accept', authMiddleware, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Get visibility context
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
@@ -1417,7 +1428,7 @@ router.post('/:id/accept', authMiddleware, async (req: Request, res: Response) =
     );
 
     // Log the state change
-    await logDocumentChange(id!, 'state', 'triage', 'backlog', req.userId!);
+    await logDocumentChange(id!, 'state', 'triage', 'backlog', getUserId(req));
 
     const issue = extractIssueFromRow(result.rows[0]);
     res.json({ ...issue, display_id: `#${issue.ticket_number}` });
@@ -1445,8 +1456,8 @@ const listIterationsSchema = z.object({
 router.post('/:id/iterations', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id: issueId } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     const parsed = createIterationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1513,8 +1524,8 @@ router.post('/:id/iterations', authMiddleware, async (req: Request, res: Respons
 router.get('/:id/iterations', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id: issueId } = req.params;
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     // Parse and validate query params
     const queryParsed = listIterationsSchema.safeParse(req.query);
@@ -1583,8 +1594,8 @@ router.get('/:id/iterations', authMiddleware, async (req: Request, res: Response
 router.post('/:id/reject', authMiddleware, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
-    const userId = req.userId!;
-    const workspaceId = req.workspaceId!;
+    const userId = getUserId(req);
+    const workspaceId = getWorkspaceId(req);
 
     const parsed = rejectIssueSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -1629,7 +1640,7 @@ router.post('/:id/reject', authMiddleware, async (req: Request, res: Response) =
     );
 
     // Log the state change
-    await logDocumentChange(id!, 'state', 'triage', 'cancelled', req.userId!);
+    await logDocumentChange(id!, 'state', 'triage', 'cancelled', getUserId(req));
 
     const issue = extractIssueFromRow(result.rows[0]);
     res.json({ ...issue, display_id: `#${issue.ticket_number}` });

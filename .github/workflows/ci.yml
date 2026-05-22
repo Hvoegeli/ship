@@ -1,0 +1,68 @@
+# S13: the repo had NO CI — nothing gated between a developer's machine and a
+# local deploy script. This workflow runs the same checks the audit relies on:
+# frozen-lockfile install → shared build → type-check → lint → api tests (against
+# a Postgres service) → web build. Mirrors the local commands in CLAUDE.md.
+name: CI
+
+on:
+  push:
+    branches: [master, 'shipshape/**', 'feat/**']
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ship
+          POSTGRES_PASSWORD: ship
+          POSTGRES_DB: ship_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ship"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://ship:ship@localhost:5432/ship_dev
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm build:shared
+
+      - name: Type-check (all packages)
+        run: pnpm type-check
+
+      - name: Lint (ESLint gate)
+        run: pnpm lint
+
+      - name: Migrate + seed database
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+
+      - name: API unit tests
+        run: pnpm --filter @ship/api test
+
+      - name: Web build
+        run: pnpm build:web

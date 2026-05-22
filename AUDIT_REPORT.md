@@ -53,6 +53,8 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 4. **Medium — no linter at all.** No automated guard prevents new violations; configuring `@typescript-eslint` is itself a measurable, durable improvement (TS1/TS3).
 5. **Low/scoping — `shared/` is clean (0).** Do not spend Cat-1 effort there (confirms S-findings).
 
+**Phase-2 result (fix + after-measurement).** The dominant `!` class was 236 `req.userId!`/`req.workspaceId!` route assertions — replaced with **runtime-validated accessors** `getUserId(req)`/`getWorkspaceId(req)` (throw on a non-authenticated request, return `string`), migrated across 21 route files. Added an **ESLint gate** (`eslint` + `typescript-eslint` flat config: `no-explicit-any`, `no-non-null-assertion`, `consistent-type-assertions` as warnings) — turning the no-op `pnpm lint` (S9) into real coverage (199 warnings, 0 errors) that stops new violations. Added `deleted_at` to the shared `Document` type (S8). **Total violations 852 → 619 (−27.3%); non-null `!` 325 → 89** (`cat1-type-safety.mjs`), exceeding the −25% target. 451/451 api tests; type-check clean. Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 2 — Bundle Size
@@ -74,6 +76,8 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 3. **Medium — no `manualChunks` / vendor split.** A `react`/`tiptap`/`prosemirror` vendor chunk would improve caching and parallelization.
 4. **Low — candidate dead dependency** `@tanstack/query-sync-storage-persister` (verify against runtime usage before removal — removing functionality doesn't count).
 5. **Scoping (confirms P3):** `shared/` contributes ~0 (type-only) — not a bundle lever.
+
+**Phase-2 result (fix + after-measurement).** `React.lazy`-split the two editor-heavy routes (`UnifiedDocumentPage`, `PersonEditorPage` — the only static `main.tsx` paths to the TipTap editor) and the `emoji-picker-react` dependency (rendered only on picker-open), and removed the dead `@tanstack/query-sync-storage-persister` (S11). **Entry chunk: 575.7 → 222.1 kB gzip (−61%)**, raw 2025 → 809 kB; the TipTap/ProseMirror/Yjs/lowlight/highlight.js stack moved to a lazy route chunk (255.7 kB gz) and emoji-picker to its own chunk (62.6 kB gz), both fetched on demand. Total shipped JS unchanged — ~1 MB *deferred* out of first paint. The "−20% initial-load" target is exceeded ~3×. Verified: web type-check clean, `vite build` OK. Raw: `cat2-{before,after}.txt`; write-up in [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
 
 ---
 
@@ -99,6 +103,8 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 3. **Medium — RF2 per-request session write** adds a DB round-trip to every endpoint's latency floor (confirmed in Cat 4); compounds #1 under concurrency.
 4. **Low — fast endpoints are genuinely fast** (view_document/search/sprint_board P95 <25 ms @25). Honest scoping: Cat-3 gains come from the two list endpoints, not broad slowness.
 
+**Phase-2 result (fix + after-measurement).** Slimmed both list responses — dropped the `properties` blob + redundant flattened fields from `/api/documents`, and `content` from `/api/issues` (single-document fetches unchanged; full consumer-safety verified). Pagination was rejected (the wiki tree and Kanban board both need the full set client-side). Because the 627-doc snapshot is sub-millisecond, the before/after is run at **10× scale** (`scripts/audit/scale-10x.sh`, ~6,360 docs) — identical conditions, only the code differs; bounded endpoints act as a control group and stay flat. **`/api/documents` P95 −56% / −58% / −53%** (conc 10/25/50), **throughput +128%** — a decisive, all-load pass of the "≥20% on ≥2 endpoints" bar. **`/api/issues` P95 −11% / −9% / −19%, throughput +18%** — it clears ~−20% only at peak load because it is **processing-bound, not payload-bound** (cost is the per-row map + associations batch, not serialization; a null-omission experiment was tried and *reverted* after it measured slower). Raw: `cat3-{before,after}-10x.txt`; full write-up + honest requirement mapping in [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 4 — Database Query Efficiency
@@ -113,7 +119,48 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 | Load sprint board | `GET /api/weeks` | 5 | 0.382 | No |
 | Search content | `GET /api/search/mentions?q=load` | 5 | 0.470 | No |
 
-**EXPLAIN ANALYZE — slowest query (main_page documents list):** Bitmap Index Scan on `idx_documents_document_type` → Bitmap Heap Scan (filters `workspace_id`/`archived_at`/`deleted_at`) → Sort. **Exec 0.144 ms / Planning 0.561 ms** (planning > execution). The purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` is **not chosen** (low selectivity at this volume).
+**EXPLAIN ANALYZE — the two slowest list queries (plan trees inline, captured against the pinned snapshot).**
+
+*`main_page`* — `GET /api/documents?document_type=wiki` (113 rows returned):
+
+```text
+Sort  (cost=75.91..76.20 rows=113 width=242) (actual time=0.233..0.237 rows=113 loops=1)
+  Sort Key: "position", created_at DESC
+  Sort Method: quicksort  Memory: 42kB
+  ->  Bitmap Heap Scan on documents  (cost=5.03..72.06 rows=113 width=242) (actual time=0.037..0.150 rows=113 loops=1)
+        Recheck Cond: (document_type = 'wiki'::document_type)
+        Filter: ((archived_at IS NULL) AND (deleted_at IS NULL) AND (workspace_id = '81a69640-…'::uuid))
+        Heap Blocks: exact=29
+        ->  Bitmap Index Scan on idx_documents_document_type  (cost=0.00..5.00 rows=113 width=0) (actual time=0.021..0.021 rows=113 loops=1)
+              Index Cond: (document_type = 'wiki'::document_type)
+Planning Time: 1.077 ms
+Execution Time: 0.273 ms
+```
+
+*`list_issues`* — `GET /api/issues` (328 rows, two `LEFT JOIN`s to resolve the assignee):
+
+```text
+Sort  (cost=171.28..172.10 rows=328 width=457) (actual time=0.661..0.673 rows=328 loops=1)
+  Sort Key: (CASE (d.properties ->> 'priority') WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END), d.updated_at DESC
+  Sort Method: quicksort  Memory: 121kB
+  ->  Hash Left Join  (cost=71.25..157.57 rows=328 width=457) (actual time=0.123..0.497 rows=328 loops=1)
+        Hash Cond: ((d.properties ->> 'assignee_id') = (person_doc.properties ->> 'user_id'))
+        ->  Hash Left Join  (cost=1.70..76.12 rows=328 width=468) (actual time=0.066..0.360 rows=328 loops=1)
+              Hash Cond: (((d.properties ->> 'assignee_id'))::uuid = u.id)
+              ->  Seq Scan on documents d  (cost=0.00..73.41 rows=328 width=436) (actual time=0.010..0.212 rows=328 loops=1)
+                    Filter: ((archived_at IS NULL) AND (deleted_at IS NULL) AND (workspace_id = '81a69640-…'::uuid) AND (document_type = 'issue'::document_type))
+                    Rows Removed by Filter: 299
+              ->  Hash  (cost=1.31..1.31 rows=31 width=48) (actual time=0.024..0.024 rows=31 loops=1)
+                    ->  Seq Scan on users u  (cost=0.00..1.31 rows=31 width=48) (actual time=0.012..0.014 rows=31 loops=1)
+        ->  Hash  (cost=68.91..68.91 rows=51 width=142) (actual time=0.047..0.047 rows=51 loops=1)
+              ->  Bitmap Heap Scan on documents person_doc  (cost=4.55..68.91 rows=51 width=142) (actual time=0.012..0.029 rows=51 loops=1)
+                    Recheck Cond: (document_type = 'person'::document_type)
+                    ->  Bitmap Index Scan on idx_documents_document_type  (cost=0.00..4.53 rows=51 width=0) (actual time=0.009..0.009 rows=51 loops=1)
+Planning Time: 1.256 ms
+Execution Time: 0.744 ms
+```
+
+**Read of the plans.** *main_page* picks a `Bitmap Index Scan` on `idx_documents_document_type` — **not** the purpose-built partial index `idx_documents_active(workspace_id, document_type) WHERE archived_at IS NULL AND deleted_at IS NULL` (too low-selectivity to win at this volume); planning (1.08 ms) actually exceeds execution (0.27 ms). *list_issues* is the more telling plan: the `document_type='issue'` filter falls to a **`Seq Scan` on `documents`** (328 of 627 rows match — `Rows Removed by Filter: 299`), and the assignee resolution is two **`Hash Left Join`s on JSONB `->>` extraction** (`properties->>'assignee_id'`) that **no index covers** — the concrete shape behind finding **S3**. Both still run in well under 1 ms at 627/328 rows, which is why the honest Cat-4 lever is *query count* (the per-request auth write, #1 below) and *payload size* (no pagination, #2), **not** query speed — but the issues `Seq Scan` + unindexed JSONB join is exactly the latent cost that surfaces at 10× volume.
 
 **Weaknesses / opportunities (ranked):**
 1. **High — universal per-request auth query tax (RF2, now measured).** Every flow runs `SELECT … FROM sessions …` **+** `UPDATE sessions SET last_activity = $1` — **2 of every flow's 4–5 queries are auth overhead**, on every request. Throttling the `last_activity` write (only when stale) cleanly hits the deck's *"20% fewer queries on ≥1 flow"* (e.g., view_document 4→3 = −25%). Strongest Cat-4 improvement target.
@@ -142,6 +189,8 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 5. **Medium — doc undercount (TI1).** README/PRD/CLAUDE say "73+ tests"; reality ≈ **1,484** across all suites (~20× off). "73" ≈ E2E spec-file count, mislabeled as tests.
 6. **Medium — running unit tests destroys dev data.** `pnpm --filter @ship/api test*` truncates `ship_dev` — confirmed repeatedly. Mitigated this audit by `scripts/audit/db-restore.sh` (snapshot), but the underlying test-isolation defect remains.
 7. **Low/positive — api unit suite is stable & fast** on the supported pre-state (451/451 ×3, ~16 s). The healthy part of the test stack.
+
+**Phase-2 result (fix + after-measurement).** Added 16 meaningful unit tests (`api/src/middleware/errorHandler.test.ts`) on previously zero-coverage, security-relevant paths — the Cat-6 error-handling layer (`validateUuidParam`, `enforceJsonContentType`, `jsonErrorHandler` incl. an explicit "no stack/detail leakage" assertion, `apiNotFoundHandler`) and the Cat-1 auth accessors (`getUserId`/`getWorkspaceId` return-vs-throw). **API suite 451 → 467, all green** on fresh seed. Implemented the mandated **`/e2e-test-runner` skill** (H6) at `.claude/skills/e2e-test-runner/SKILL.md` — uses the existing `progress-reporter.ts` → `test-results/summary.json` to run the suite detached and poll a compact summary (no raw-output explosion), with `--last-failed` iteration. Target ("+3 meaningful tests, or fix 3 flaky") exceeded. (M6/M7 test-infra config remain documented follow-ups.) Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
 
 ---
 
@@ -181,6 +230,8 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 8. **Medium — stored-XSS defense-in-depth gap (Probe 6).** HTML/script payloads in a document title+body are persisted **raw** (no server-side sanitization). Not executed today because React/TipTap escapes on render, so it is *not* an active vulnerability — but any consumer that renders document fields without escaping (exports, emails, a future non-React surface, the API itself) would be exposed. Sanitize on write or document the render-escaping as a hard invariant.
 9. **Low / positive — concurrent collaborative editing is safe (Probe 7).** Two simultaneous Yjs clients editing the same field both survive (CRDT merge), 0 console errors, reproducible ×3. Confirms the real-time core is sound; combined with #4 this scopes the *only* genuine collab risk to the server-side swallowed-persist path.
 10. **Medium — error-boundary coverage is partial (topology, not fault-injected).** The `ErrorBoundary` class is mounted only around the authenticated `<Outlet>` (`pages/App.tsx:542`) and the editor content (`components/Editor.tsx:980`). The router root (`main.tsx`), the provider stack (`Workspace`/`Auth`/`RealtimeEvents`), the persistent nav/sidebar chrome, and the public routes (`/feedback/:programId`, `/login`, `/setup`) have **no** boundary — a throw there is an unhandled white-screen crash with no fallback UI. Route *page* errors are caught; everything above/around the content area is not. *Phase-2 lever:* add a top-level boundary in `main.tsx` (and one around the public-route subtree).
+
+**Phase-2 result (fix + after-measurement).** Added a centralized error-handling layer (`api/src/middleware/errorHandler.ts`): a JSON error handler registered last (malformed JSON→400, oversized→413, CSRF→403, Postgres `22P02`→400, else→500 — standard envelope, no stack leak), `enforceJsonContentType` (415 on unsupported media type), and `validateUuidParam` (`router.param('id')` guard) wired into the documents + issues routers. Added a top-level React `ErrorBoundary` wrapping the entire render tree in `main.tsx`. **After (`cat6-runtime.mjs` Probe 2):** `bad_json_body` 400-HTML→**400 JSON**, `missing_csrf` 403-HTML→**403 JSON**, `wrong_content_type` **201-junk-doc→415**, `bad_uuid_path` **500→400 JSON**; **Probe 5 Postgres ERROR lines 1→0**. Four error-handling gaps closed (≥1 data-confusion: the silent junk-document). 451/451 tests. Full write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md). (Item #4/RT1 server-persist residual remains open — tracked as supplemental S4.)
 
 ---
 
@@ -227,6 +278,35 @@ Neither tool is "lying" — axe measures the markup layer, the AT-snapshot measu
 7. **Low — two pages have non-descriptive titles (WCAG 2.4.2).** view_document and my_week render `Ship | Ship` instead of the document/week name; main_docs, issues, team_dir are correct.
 8. **Low — login page lacks `main`/`nav` landmarks.** Otherwise the cleanest page; form fields are labelled, Email is auto-focused, and Tab order is correct (`Email → Password → Sign in` — *supersedes an earlier "Password before Email" misread*). `lang=en` + 20–23 axe passes/page app-wide confirm the hygiene basics are in place.
 
+**Phase-2 result (fix + after-measurement).** Fixed all axe Critical/Serious violations. Root causes pinpointed via a targeted `@axe-core/playwright` probe: (a) the workspace/private document `<ul role="tree">` sidebars contained bare `<li>` "N more…"/empty-state children (neither `treeitem` nor `group`) → `aria-required-children` (critical) + `listitem` (serious), fixed by adding `role="treeitem"`; (b) my_week used `text-muted/50` and `text-accent` below 4.5:1, fixed (`text-muted`, solid-accent badge, bold `text-foreground` for "today"). **Aggregate Critical 2→0, Serious 17→0, color-contrast 15→0; pages with 0 Critical/Serious 3/6 → 6/6** (`cat7-a11y.mjs`). Target ("0 Critical/Serious on the top-3 pages") exceeded — clean across all pages. The auto-opening standup modal (H4) is a documented UX follow-up: escapable, *not* an axe Critical/Serious, and altering its auto-open is a product-flow change with E2E risk. Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
+---
+
+## Category 8 — Security Audit (added requirement)
+
+**How measured:** a purpose-built, single-command, dependency-free active probe — `node scripts/audit/cat8-security.mjs before|after` — exercises the **running** API (`:3000`) across 8 OWASP-aligned areas (AuthN/Z enforcement, session-cookie hardening, CSRF, injection [SQLi/path], error verbosity/info-disclosure, security headers + CSP, rate limiting) and parses the dependency tree for known CVEs (`pnpm audit`). Each check is a structured finding `{id, area, severity, status}` emitted as text + JSON for before/after diffing. Design borrows the findings/severity/report schema and auth-probe shape from our `agentforge` LLM-red-team tool (design-level reuse only). **Condition:** snapshot-pinned for DB-touching probes. Raw: `docs/audit/raw/cat8-{before,after}.txt`.
+
+**Baseline (`before`):** PASS=12 / WARN=3 / **FAIL=1**; dependency CVEs **critical=2, high=31**, moderate=39, low=4.
+
+| Probe area | Baseline result |
+|---|---|
+| AuthN/Z (unauth → 401 on documents/issues/dashboard) | **PASS** |
+| Session cookie HttpOnly / SameSite=Strict | **PASS** |
+| CSRF enforced on state-changing POST | **PASS** |
+| Injection (SQLi-style filter, bad-uuid path) | **PASS** (parameterized; bad-uuid 400 via Cat 6) |
+| Error verbosity (no HTML/stack leak) | **PASS** (Cat 6) |
+| Security headers (HSTS, nosniff, CSP present) | **PASS** (CSP has `script-src 'unsafe-inline'` — WARN) |
+| Rate limiting present | **PASS** |
+| Dependency CVEs (critical / high) | **FAIL** (2 critical, 31 high) |
+
+**Manual review (harvested from the deep static review):** secrets — none in git history or deploy bundles (verified, S15); multi-tenant **workspace isolation** consistently enforced (no IDOR); **SQL parameterized throughout** (no injection); **auth hardening strong** (session-fixation prevention, strict cookies, dual NIST timeouts, textbook CAIA OAuth PKCE/state/nonce). The genuine gaps were (a) **S12 — the persisted client cache was not identity-scoped** (cross-user exposure on a shared browser) and (b) the **dependency CVE backlog**.
+
+**Phase-2 result (≥2 fixes, after-measurement).**
+1. **S12 (High) — fixed.** `logout()` cleared only the localStorage auth blob, leaving the 24h-persisted TanStack Query cache (document/issue/dashboard lists) in IndexedDB → a second user on the same browser briefly saw the prior user's data. Now `logout()` clears both the in-memory query cache (`queryClient.clear()`) and the persisted IndexedDB store (`clearAllCacheData()`).
+2. **Dependency CVEs — fixed (probe-measured).** Added precise same-major `pnpm.overrides` (protobufjs, fast-xml-parser, path-to-regexp, picomatch, flatted, fast-uri). **`pnpm audit`: critical 2→0, high 31→20, moderate 39→31.** Verified non-breaking (type-check clean, 451/451 api tests, web build OK). Risky major bumps (build/dev-only) were deliberately not forced — documented as residual.
+
+**After (`after`):** PASS=13 / WARN=3 / **FAIL=0**; CVEs **critical=0, high=20**. Remaining WARN: CSP `script-src 'unsafe-inline'` (admin inline script) — a documented hardening follow-up. Full write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Supplementary Findings — Deep Static Review (Phase-1, post-baseline)
@@ -242,6 +322,13 @@ Beyond the seven harness-measured categories above, a **full read-through of the
 Severity-ranked synthesis across all 7 categories. Each row: the finding, its category, the **committed script that reproduces it** (re-run identically in Phase 2 for before/after), and the measurable Phase-2 lever where the deck specifies one. **`H#`/`M#`/`L#` rows are harness-measured; `S#` rows are the deep-static-review findings** (full detail + `file:line` + method in the companion [`docs/audit/SUPPLEMENTARY-FINDINGS.md`](docs/audit/SUPPLEMENTARY-FINDINGS.md)) — they're diagnoses by code inspection, several independently reproducible by a one-off query/command as noted. Full methodology/evidence in the per-category sections above; raw in `docs/audit/raw/`.
 
 **Phase-1 gate: 7 / 7 categories baselined.** Condition of record fixed via the committed snapshot (627 docs / 328 issues / 35 sprints / 31 users / 625 assoc; restore via `bash scripts/audit/db-restore.sh`). No application code changed during the audit — only reproducible instruments + deterministic test data.
+
+**Severity criteria (how the findings below are ranked).**
+- **High** — hits a *normal* user flow at realistic volume, breaks a *documented guarantee* (e.g. the README's Section 508 / WCAG AA claim), or risks **data loss**. Broad reach, or certain to bite in production.
+- **Medium** — a real defect with narrower blast radius, or **latent at current volume** (bites at scale or under specific conditions); an availability or quality risk rather than an active failure.
+- **Low / positive** — minor or cosmetic, *or* an honest "this is sound — **not** a Phase-2 lever" scoping note (so effort isn't spent where the system is already healthy).
+
+*(The orientation notes use a separate, setup-specific scale — "High = blocks a new engineer from running the app" — which applies only to the install-deviation register, not to these cross-category findings.)*
 
 ### High
 

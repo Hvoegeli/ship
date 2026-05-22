@@ -1,0 +1,50 @@
+# Cat 7 Accessibility — after
+commit: f61df5be74b010e6dfcfbacc8ff290207e87bce9
+date: 2026-05-22T04:28:48.783Z
+condition: 577+ docs / 328 issues / 31 users; web :5173 (dev, StrictMode ON)
+knobs: settle=2500ms tab_budget=60; axe tags=wcag2a+wcag2aa+wcag21a+wcag21aa
+
+## Probe 1 — axe-core WCAG 2.1 A+AA violations per page (by node instances)
+page          | critical | serious | moderate | minor | distinct | passes
+login         |        0 |       0 |        0 |     0 |        0 | 23
+main_docs     |        0 |       0 |        0 |     0 |        0 | 20
+view_document |        0 |       0 |        0 |     0 |        0 | 23
+issues        |        0 |       0 |        0 |     0 |        0 | 21
+my_week       |        0 |       0 |        0 |     0 |        0 | 20
+team_dir      |        0 |       0 |        0 |     0 |        0 | 20
+
+AGGREGATE node instances — critical=0 serious=0 moderate=0 minor=0
+Critical+Serious total = 0; distinct rule ids across pages = 0 ()
+
+### Top violation rules per page (id, impact, nodes)
+- login:
+- main_docs:
+- view_document:
+- issues:
+- my_week:
+- team_dir:
+
+## Probe 2 — color-contrast (directly tests README 508/WCAG-AA claim)
+- total color-contrast violating nodes across pages: 0
+
+## Probe 3 — keyboard reachability (Tab budget = 60)
+page          | interactiveEls | focusableReached | trapSuspected
+login         |              4 |                4 | false
+main_docs     |            382 |                4 | false
+view_document |             49 |                4 | false
+issues        |           1018 |                4 | false
+my_week       |             30 |                4 | false
+team_dir      |             25 |                4 | false
+
+## Probe 4 — document/landmark basics
+page          | lang | h1 | main | nav | imgs | imgAlt%  | title
+login         |   en |  1 | false | false |    1 |    100% | Ship - Project Management & Documentation
+main_docs     |   en |  1 | true | true |    0 |    100% | Documents | Ship
+view_document |   en |  1 | true | true |    0 |    100% | Ship | Ship
+issues        |   en |  1 | true | true |    0 |    100% | Issues | Ship
+my_week       |   en |  1 | true | true |    0 |    100% | Ship | Ship
+team_dir      |   en |  1 | true | true |    0 |    100% | Team Directory | Ship
+
+Notes: dev build (StrictMode). axe scans the rendered SPA after networkidle
++ settle. Counts are node instances (a single rule can flag many nodes).
+Triage/severity + the README-claim verdict are recorded in AUDIT_REPORT.md.

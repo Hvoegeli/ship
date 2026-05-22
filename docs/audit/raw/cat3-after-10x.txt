@@ -1,0 +1,37 @@
+# Cat 3 API Response Time — after-10x
+commit: f352997523c783de760eb82468d1bd80caa6726d
+date: 2026-05-22T01:03:45.105Z
+condition: documents=6360 issues=4592 sprints=35 users=31 — snapshot-pinned (scripts/audit/db-restore.sh); API :3000 direct (no proxy)
+knobs: warmup=10 budget=120 req/cell; concurrency 10/25/50
+pg statement logging: OFF (reset after cat4)
+
+## main_page   /api/documents?document_type=wiki
+conc | P50ms | P95ms | P99ms | avg | max | req/s | errors
+  10 | 290.56 | 424.58 | 499.8 | 289.36 | 551.16 |   33.3 | 0
+  25 | 737.57 | 1041.02 | 1101.12 | 688.38 | 1101.21 |   32.8 | 0
+  50 | 1426.93 | 1735.82 | 2191.14 | 1237.86 | 2223.95 |     33 | 0
+
+## view_document   /api/documents/5b021515-aed9-487d-9920-14f0a77d8049
+conc | P50ms | P95ms | P99ms | avg | max | req/s | errors
+  10 |  14.5 | 24.45 | 32.56 | 15.19 |  32.94 |  635.9 | 0
+  25 | 31.41 | 39.26 |  40.4 | 30.63 |  41.44 |  757.1 | 0
+  50 |  57.1 | 71.93 | 99.16 | 53.74 | 104.26 |  795.1 | 0
+
+## list_issues   /api/issues
+conc | P50ms | P95ms | P99ms | avg | max | req/s | errors
+  10 | 370.31 | 540.58 | 603.9 | 380.84 | 617.52 |   25.6 | 0
+  25 | 895.2 | 1309.3 | 1333.84 | 870.47 | 1335.04 |   26.3 | 0
+  50 | 1770.9 | 2213.41 | 2282.87 | 1617.27 | 2864.15 |     26 | 0
+
+## sprint_board   /api/weeks
+conc | P50ms | P95ms | P99ms | avg | max | req/s | errors
+  10 | 10.06 | 25.52 | 36.13 | 11.73 |  36.91 |  816.4 | 0
+  25 | 21.63 | 26.58 |  28.4 | 21.51 |   30.5 | 1094.8 | 0
+  50 | 39.26 | 52.55 |  56.5 | 38.46 |  57.36 | 1118.6 | 0
+
+## search   /api/search/mentions?q=load
+conc | P50ms | P95ms | P99ms | avg | max | req/s | errors
+  10 |  4.04 | 32.08 | 156.63 | 11.28 | 156.64 |  491.7 | 120  <-- 120 errors (likely rate-limit; invalid cell)
+  25 |  3.27 | 119.76 | 120.79 | 18.78 | 122.17 |  961.5 | 120  <-- 120 errors (likely rate-limit; invalid cell)
+  50 |  8.07 | 32.07 | 33.46 | 11.17 |  33.54 | 3301.4 | 120  <-- 120 errors (likely rate-limit; invalid cell)
+

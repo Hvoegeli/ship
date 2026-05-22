@@ -1,0 +1,33 @@
+# Cat 8 Security Probe — before
+commit: 98c131a4d493325d6b4ce8c32d3913a9139f1189
+date: 2026-05-22T03:56:55.069Z
+target: http://localhost:3000 (snapshot-pinned where DB-touching; scripts/audit/db-restore.sh)
+summary: PASS=12 WARN=3 FAIL=1 (total 16)
+dependency CVEs: critical=2 high=31 moderate=39 low=4
+
+## Findings
+id | area | severity | status | detail
+A:/api/documents | authz | high | PASS | unauthenticated GET /api/documents -> 401 (expect 401)
+A:/api/issues | authz | high | PASS | unauthenticated GET /api/issues -> 401 (expect 401)
+A:/api/dashboard/my-work | authz | high | PASS | unauthenticated GET /api/dashboard/my-work -> 401 (expect 401)
+B:httponly | session | high | PASS | session cookie HttpOnly: true
+B:samesite | session | medium | PASS | session cookie SameSite=Strict: true (Secure flag is prod-only by design)
+C:csrf | csrf | high | PASS | POST without CSRF token -> 403 (expect 403)
+D:sqli | injection | critical | PASS | SQLi-style filter -> 200 (expect <500; parameterized)
+D:badid | injection | medium | PASS | bad-uuid path -> 400 (expect 400/404, not 500)
+E:stack | infodisclosure | medium | PASS | malformed body -> 400; HTML/stack leaked: false
+F:hsts | headers | low | PASS | Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+F:nosniff | headers | low | PASS | X-Content-Type-Options: nosniff
+F:csp | headers | medium | WARN | CSP present: true; script-src 'unsafe-inline': true
+G:ratelimit | availability | low | PASS | RateLimit headers present: true
+H:cve-critical | dependencies | critical | FAIL | critical CVEs: 2
+H:cve-high | dependencies | high | WARN | high CVEs: 31
+H:cve-moderate | dependencies | medium | WARN | moderate CVEs: 39
+
+## FAIL (action required)
+- [critical] H:cve-critical: critical CVEs: 2
+
+## WARN (review)
+- [medium] F:csp: CSP present: true; script-src 'unsafe-inline': true
+- [high] H:cve-high: high CVEs: 31
+- [medium] H:cve-moderate: moderate CVEs: 39

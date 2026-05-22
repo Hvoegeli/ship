@@ -26,7 +26,12 @@ function createMockReqRes(cookies: Record<string, string> = {}) {
 
 describe('authMiddleware', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so the per-test `mockResolvedValueOnce`
+    // queue is flushed between tests. clearAllMocks only wipes call history and
+    // leaves queued one-shot return values intact; once the Cat-4 touch-coalescing
+    // change made some flows issue one fewer DB call, an unconsumed queued value
+    // would leak into the next test and answer its first query with stale data.
+    vi.resetAllMocks();
   });
 
   describe('session validation', () => {
