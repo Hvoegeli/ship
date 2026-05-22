@@ -57,7 +57,8 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ✅ this commit | `cat2-bundle.mjs` entry chunk 575.7→222.1 kB gz (−61%) |
 | H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ◑ deferred | not an axe crit/serious; escapable per audit; risky product-flow change |
 | H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ✅ this commit | `cat1-type-safety.mjs` 852→619 (−27.3%) + eslint gate |
-| H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ⚪ planned | `test-results/summary.json` |
+| H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ✅ this commit | `.claude/skills/e2e-test-runner/SKILL.md` |
+| Cat 5 — +meaningful tests on untested paths | 5 | — | +3 tests OR fix 3 flaky | ✅ this commit | +16 tests (errorHandler + auth accessors); 451→467 |
 | H7 — README 508/WCAG AA overclaim | 7 | High | substantiate/retract | ⚪ planned | `cat7-lighthouse.mjs` |
 | H8 — unvalidated input → 500 / HTML stack traces | 6 | High | input validation + JSON envelope | ✅ this commit | `cat6-runtime.mjs` Probe 2: bad_uuid 500→400, JSON not HTML; Probe 5 PG errors 1→0 |
 | M1 — rate limiter 100/min prod | 3 | Med | (availability note) | ⚪ planned | `cat3-api.mjs` |
@@ -234,3 +235,16 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
   Target (−25% = 213) **exceeded**. (`any`/`as` are ~flat — the win is the validated-accessor narrowing of `!`, plus the gate stopping future growth. `any`+2 is from Cat-6/8 new files, e.g. `err: any` in the error handler.)
 - **Test fixtures updated (justified):** 4 test files `vi.mock('../middleware/auth.js')` returning only `authMiddleware`; the mock must mirror the real module's exports, so added `getUserId`/`getWorkspaceId` to each mock (they read the same `req.userId`/`req.workspaceId` the mock sets). **451/451** on fresh seed; type-check clean.
 - **Reproduce:** `node scripts/audit/cat1-type-safety.mjs after` → compare to `cat1-before.txt`; `pnpm lint` to see the gate.
+
+### 2026-05-21 · (this commit) — Cat 5: meaningful tests on untested critical paths + implement `/e2e-test-runner` (H6) ✅
+- **Target:** "+3 meaningful tests on untested paths **or** fix 3 flaky with RCA." Chosen path: **add tests on zero-coverage, security-relevant code** — specifically the new Cat-6 error-handling layer and the Cat-1 auth accessors, which had no coverage.
+- **Tests added (`api/src/middleware/errorHandler.test.ts`, 16 tests):**
+  - `validateUuidParam` — rejects non-UUID (400, no `next`), passes valid UUID (guards the H8 bad-uuid→500 regression).
+  - `enforceJsonContentType` — text/plain POST→415, json→pass, GET skipped, empty-body skipped (guards the M3 silent junk-doc regression).
+  - `jsonErrorHandler` — malformed-JSON→400, oversized→413, CSRF→403, PG 22P02→400, **and a generic 500 that does NOT leak the error message** (asserts no stack/detail leakage — guards H8).
+  - `apiNotFoundHandler` — JSON 404.
+  - `getUserId`/`getWorkspaceId` — return the id when authed, **throw** when not (the Cat-1 invariant).
+  - Result: api suite **451 → 467** (29 files), all green on fresh seed.
+- **H6 — `/e2e-test-runner` skill implemented:** `.claude/skills/e2e-test-runner/SKILL.md`. The repo already shipped the machinery (`e2e/progress-reporter.ts` writes `test-results/summary.json`; `scripts/watch-tests.sh` reads it) but the *skill* mandated by `CLAUDE.md` didn't exist. The skill documents the safe procedure: launch the ~880-test suite **detached**, poll the compact `summary.json` (never stream raw output → avoids the context-window explosion the docs warn about), inspect only `test-results/errors/`, and iterate with `--last-failed`.
+- **Not addressed (scoping note):** M6 (`pnpm test` runs only api) and M7 (unit tests truncate `ship_dev`) are test-infra config items, not part of the "+3 tests" target; left documented.
+- **Reproduce:** `pnpm --filter @ship/api test` → 467 passed; `/e2e-test-runner` skill is invokable.

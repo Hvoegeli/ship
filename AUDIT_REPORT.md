@@ -190,6 +190,8 @@ Execution Time: 0.744 ms
 6. **Medium — running unit tests destroys dev data.** `pnpm --filter @ship/api test*` truncates `ship_dev` — confirmed repeatedly. Mitigated this audit by `scripts/audit/db-restore.sh` (snapshot), but the underlying test-isolation defect remains.
 7. **Low/positive — api unit suite is stable & fast** on the supported pre-state (451/451 ×3, ~16 s). The healthy part of the test stack.
 
+**Phase-2 result (fix + after-measurement).** Added 16 meaningful unit tests (`api/src/middleware/errorHandler.test.ts`) on previously zero-coverage, security-relevant paths — the Cat-6 error-handling layer (`validateUuidParam`, `enforceJsonContentType`, `jsonErrorHandler` incl. an explicit "no stack/detail leakage" assertion, `apiNotFoundHandler`) and the Cat-1 auth accessors (`getUserId`/`getWorkspaceId` return-vs-throw). **API suite 451 → 467, all green** on fresh seed. Implemented the mandated **`/e2e-test-runner` skill** (H6) at `.claude/skills/e2e-test-runner/SKILL.md` — uses the existing `progress-reporter.ts` → `test-results/summary.json` to run the suite detached and poll a compact summary (no raw-output explosion), with `--last-failed` iteration. Target ("+3 meaningful tests, or fix 3 flaky") exceeded. (M6/M7 test-infra config remain documented follow-ups.) Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 6 — Runtime Error and Edge Case Handling
