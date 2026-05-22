@@ -274,6 +274,33 @@ Neither tool is "lying" — axe measures the markup layer, the AT-snapshot measu
 
 ---
 
+## Category 8 — Security Audit (added requirement)
+
+**How measured:** a purpose-built, single-command, dependency-free active probe — `node scripts/audit/cat8-security.mjs before|after` — exercises the **running** API (`:3000`) across 8 OWASP-aligned areas (AuthN/Z enforcement, session-cookie hardening, CSRF, injection [SQLi/path], error verbosity/info-disclosure, security headers + CSP, rate limiting) and parses the dependency tree for known CVEs (`pnpm audit`). Each check is a structured finding `{id, area, severity, status}` emitted as text + JSON for before/after diffing. Design borrows the findings/severity/report schema and auth-probe shape from our `agentforge` LLM-red-team tool (design-level reuse only). **Condition:** snapshot-pinned for DB-touching probes. Raw: `docs/audit/raw/cat8-{before,after}.txt`.
+
+**Baseline (`before`):** PASS=12 / WARN=3 / **FAIL=1**; dependency CVEs **critical=2, high=31**, moderate=39, low=4.
+
+| Probe area | Baseline result |
+|---|---|
+| AuthN/Z (unauth → 401 on documents/issues/dashboard) | **PASS** |
+| Session cookie HttpOnly / SameSite=Strict | **PASS** |
+| CSRF enforced on state-changing POST | **PASS** |
+| Injection (SQLi-style filter, bad-uuid path) | **PASS** (parameterized; bad-uuid 400 via Cat 6) |
+| Error verbosity (no HTML/stack leak) | **PASS** (Cat 6) |
+| Security headers (HSTS, nosniff, CSP present) | **PASS** (CSP has `script-src 'unsafe-inline'` — WARN) |
+| Rate limiting present | **PASS** |
+| Dependency CVEs (critical / high) | **FAIL** (2 critical, 31 high) |
+
+**Manual review (harvested from the deep static review):** secrets — none in git history or deploy bundles (verified, S15); multi-tenant **workspace isolation** consistently enforced (no IDOR); **SQL parameterized throughout** (no injection); **auth hardening strong** (session-fixation prevention, strict cookies, dual NIST timeouts, textbook CAIA OAuth PKCE/state/nonce). The genuine gaps were (a) **S12 — the persisted client cache was not identity-scoped** (cross-user exposure on a shared browser) and (b) the **dependency CVE backlog**.
+
+**Phase-2 result (≥2 fixes, after-measurement).**
+1. **S12 (High) — fixed.** `logout()` cleared only the localStorage auth blob, leaving the 24h-persisted TanStack Query cache (document/issue/dashboard lists) in IndexedDB → a second user on the same browser briefly saw the prior user's data. Now `logout()` clears both the in-memory query cache (`queryClient.clear()`) and the persisted IndexedDB store (`clearAllCacheData()`).
+2. **Dependency CVEs — fixed (probe-measured).** Added precise same-major `pnpm.overrides` (protobufjs, fast-xml-parser, path-to-regexp, picomatch, flatted, fast-uri). **`pnpm audit`: critical 2→0, high 31→20, moderate 39→31.** Verified non-breaking (type-check clean, 451/451 api tests, web build OK). Risky major bumps (build/dev-only) were deliberately not forced — documented as residual.
+
+**After (`after`):** PASS=13 / WARN=3 / **FAIL=0**; CVEs **critical=0, high=20**. Remaining WARN: CSP `script-src 'unsafe-inline'` (admin inline script) — a documented hardening follow-up. Full write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
+---
+
 ## Supplementary Findings — Deep Static Review (Phase-1, post-baseline)
 
 Beyond the seven harness-measured categories above, a **full read-through of the repository** (backend security, data integrity, real-time/scaling, frontend, infra) surfaced **15 additional findings (S1–S15)** — security, data-integrity, real-time durability, scaling, reproducibility, and ops items that are *outside* the brief's 7 categories. They are **diagnoses by code inspection** (not harness output), each `file:line`'d and **verified against source** before inclusion. To keep this PRD deliverable on-spec and scannable, the **full detail lives in a companion document — [`docs/audit/SUPPLEMENTARY-FINDINGS.md`](docs/audit/SUPPLEMENTARY-FINDINGS.md)** — and the treatment plans in [`docs/audit/REMEDIATION-PLAN.md`](docs/audit/REMEDIATION-PLAN.md) (§ Supplementary fixes). The `S#` rows are carried in the Ranked Findings table below so the cross-category risk picture stays unified here.

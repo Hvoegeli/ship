@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { api, UserInfo, Workspace } from '@/lib/api';
 import { useWorkspace, WorkspaceWithRole } from '@/contexts/WorkspaceContext';
+import { queryClient, clearAllCacheData } from '@/lib/queryClient';
 
 // Cache key for offline auth
 const AUTH_CACHE_KEY = 'ship:auth-cache';
@@ -160,6 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setWorkspaces([]);
     setImpersonating(null);
     clearCachedAuthData();
+    // Cat-8 (S12): the TanStack Query cache persists to IndexedDB with a 24h
+    // gcTime and was NOT keyed to the user, so on a shared browser the next
+    // person briefly saw the prior user's document/issue/dashboard lists
+    // (stale-while-revalidate) before the server re-authorized. Clear both the
+    // in-memory cache and the persisted IndexedDB store on logout.
+    queryClient.clear();
+    await clearAllCacheData().catch((e) => console.error('Failed to clear query cache on logout:', e));
   }, [setCurrentWorkspace, setWorkspaces]);
 
   const endImpersonation = useCallback(async () => {

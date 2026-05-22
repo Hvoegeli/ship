@@ -80,12 +80,12 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | S9 — `lint` script is a no-op | 1/5 | Med | real eslint gate | ⚪ planned (with Cat 1) | `pnpm lint` |
 | S10 — E2E flake surface (628 hard-waits, FIXME) | 5 | Med | state-based waits | ⚪ planned | re-run ×3 |
 | S11 — dead dependency confirmed | 2 | Low | remove | ⚪ planned | `cat2-bundle.mjs` |
-| S12 — persisted cache not identity-scoped | sec/8 | High | buster + clear on logout | ⚪ planned (Cat 8 fix candidate) | `cat8-security.mjs` |
+| S12 — persisted cache not identity-scoped | sec/8 | High | clear cache on logout | ✅ this commit | logout now clears in-memory + IndexedDB query cache |
 | S13 — no CI pipeline | ops | Med | GitHub Actions gate | ⚪ planned (supplemental) | — |
 | S14 — non-hermetic/root prod Docker | ops/sec | Med | multi-stage, USER, HEALTHCHECK | ⚪ planned (supplemental) | build |
 | S15 — committed deploy bundles (no secrets) | hygiene | Med | `git rm` + ignore | ⚪ planned (supplemental) | `git ls-files` |
 | L1–L6 — positives / scoping notes | 1–7 | Low | *not fixed by design* | ⚫ scoping | AUDIT_REPORT § Low |
-| **Cat 8 — security probe + baseline + ≥2 fixes** | 8 | — | build tool; fix ≥2 vulns | ⚪ planned (NEW category) | `cat8-security.mjs` |
+| **Cat 8 — security probe + baseline + ≥2 fixes** | 8 | — | build tool; fix ≥2 vulns | ✅ this commit | `cat8-security.mjs` built; S12 + dependency CVEs (critical 2→0, high 31→20) |
 
 ---
 
@@ -166,3 +166,12 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 - **Test fixture corrected (justified):** `issues-history.test.ts` used non-UUID path ids (`'issue-123'`, `'nonexistent'`) which the new (correct) `:id` validation now rejects with 400. Updated the fixtures to valid UUIDs (real ids are always UUIDs; the "non-existent" cases use a valid-but-absent UUID so they still resolve to 404). **451/451** on fresh seed.
 - **Not addressed here (scoping note):** M8/RT1 server-side persist-failure swallowing remains open — it's the same fix as supplemental **S4** (SIGTERM flush + surface persist failure) and is tracked there, not in Cat 6.
 - **Reproduce:** `node scripts/audit/cat6-runtime.mjs after` (web :5173 + api :3000 up) → compare Probe 2 / Probe 5 to `cat6-before.txt`.
+
+### 2026-05-21 · (this commit) — Cat 8: security probe tool + 2 vuln fixes ✅ (NEW category)
+- **Probe tool (deliverable):** `scripts/audit/cat8-security.mjs` — a single-command, dependency-free active security probe across 8 areas (AuthN/Z enforcement, session-cookie hardening, CSRF, injection SQLi/path, error verbosity/info-disclosure, security headers + CSP, rate limiting, dependency CVEs). Emits a scored finding table (`{id, area, severity, status}`) as text **and** JSON, with before/after diffability. Design borrows the findings/severity/report schema + auth-probe shape from our `agentforge` LLM-red-team tool (design-level reuse only; this is bespoke HTTP/dependency probing). *Two probe self-bugs were caught and fixed during bring-up* (a 404-not-401 false positive from a non-endpoint target, and a `pnpm audit --json` multi-line parse bug that under-reported CVEs as 0) — the probe is only useful if it's correct.
+- **Baseline (`cat8-before.txt`):** PASS=12 WARN=3 **FAIL=1**; dependency CVEs **critical=2, high=31**, moderate=39. (AuthN/Z, CSRF, session-cookie flags, SQLi-parameterization, and — thanks to Cat 6 — error verbosity all already PASS.)
+- **Fix #1 — S12 (High, genuinely exploitable): cross-user data exposure via the persisted query cache.** The TanStack Query cache persists to IndexedDB (24h `gcTime`) and `logout()` cleared only the localStorage auth blob, **not** the query cache — so on a shared browser the next user briefly saw the prior user's document/issue/dashboard lists (stale-while-revalidate). **Fix:** `web/src/hooks/useAuth.tsx` `logout()` now calls `queryClient.clear()` (in-memory) + `clearAllCacheData()` (persisted IndexedDB). *(Client-side; not visible to the API-side probe — verified by code + manual repro: log in, log out, confirm IndexedDB `tanstack-query` store is emptied.)*
+- **Fix #2 — dependency CVEs (probe-measured).** Added precise `pnpm.overrides` (`pkg@<patched` selector, same-major patch bumps only) for `protobufjs`, `fast-xml-parser`, `path-to-regexp`, `picomatch`, `flatted`, `fast-uri`. **`pnpm audit`: critical 2→0, high 31→20, moderate 39→31.** Verified non-breaking: `pnpm type-check` clean (all pkgs), `pnpm --filter @ship/api test` **451/451**, `vite build` succeeds. (Risky **major** bumps — vite/rollup/express-rate-limit/undici, mostly build/dev-only — were deliberately *not* forced to avoid breaking the toolchain; documented as residual.)
+- **After (`cat8-after.txt`):** PASS=13 WARN=3 **FAIL=0**; CVEs **critical=0, high=20**. The one remaining `medium` WARN (CSP `script-src 'unsafe-inline'`, required by the admin-credentials inline script) is documented as a hardening follow-up.
+- **Manual-review answers (from the deep static review):** secrets — none in git/bundles (verified, S15); CORS/CSP — present (CSP has the noted `unsafe-inline`); rate limiting — present (M1: 100/min prod); error verbosity — fixed in Cat 6. Multi-tenant isolation, SQL parameterization, and auth hardening were already strong (audit § positives).
+- **Reproduce:** `node scripts/audit/cat8-security.mjs before|after` (api :3000 up, snapshot restored) → compare summary + CVE counts.

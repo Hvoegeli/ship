@@ -34,6 +34,17 @@
     "prepare": "husky",
     "postinstall": "git config merge.ours.driver true && (command -v comply >/dev/null 2>&1 || echo '\\n⚠️  comply CLI not installed - pre-commit hooks require it\\n   Install with: pip install comply-cli\\n')"
   },
+  "pnpm": {
+    "//overrides": "Cat-8 security: force patched versions of transitive deps flagged by `pnpm audit`. Selector `pkg@<patched` only rewrites the vulnerable range, leaving compatible installs untouched. Same-major patch bumps (low breakage risk); verified via type-check + tests + web build.",
+    "overrides": {
+      "protobufjs@<7.5.6": ">=7.5.6",
+      "fast-xml-parser@<5.3.6": ">=5.3.6",
+      "path-to-regexp@<0.1.12": ">=0.1.12",
+      "picomatch@<2.3.2": ">=2.3.2",
+      "flatted@<3.4.0": ">=3.4.0",
+      "fast-uri@<3.1.1": ">=3.1.1"
+    }
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.57.0",
