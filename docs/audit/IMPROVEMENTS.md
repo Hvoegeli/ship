@@ -9,6 +9,22 @@
 > [`REMEDIATION-PLAN.md`](REMEDIATION-PLAN.md); the execution checklist is
 > [`PHASE2-TASKLIST.md`](PHASE2-TASKLIST.md); the exact replay path is [`RUNBOOK.md`](RUNBOOK.md).
 
+## Scorecard — all 8 categories (before → after, harness-measured)
+
+| # | Category | Improvement Target | Before → After | Met? |
+|---|----------|--------------------|----------------|------|
+| 1 | Type Safety | −25% escape hatches | 852 → **619 (−27.3%)** + ESLint gate (S9) | ✅ exceeded |
+| 2 | Bundle Size | −20% initial load | entry chunk 575.7 → **222.1 kB gz (−61%)** | ✅ 3× over |
+| 3 | API Response | −20% P95 on ≥2 endpoints | **documents −55% P95 / +128% tput** (all loads); issues −20% at peak + processing-bound finding | ✅ (documents decisive) |
+| 4 | DB Queries | −20% queries on ≥1 flow | **−20–25% on all 5 flows** (touch-coalescing) | ✅ exceeded |
+| 5 | Test Coverage | +3 tests or fix 3 flaky | **+16 tests** (451→467) + `/e2e-test-runner` skill (H6) | ✅ exceeded |
+| 6 | Runtime Errors | 3 fixes, ≥1 data-loss | **4 gaps** (envelope/415/uuid/ErrorBoundary); PG errors 1→0 | ✅ exceeded |
+| 7 | Accessibility | 0 Critical/Serious top-3 | **19 → 0** axe Critical+Serious (6/6 pages clean) | ✅ exceeded |
+| 8 | Security (new) | probe tool + ≥2 fixes | probe built; **S12 cache exposure fixed + CVEs critical 2→0** | ✅ |
+| — | Supplementals | (beyond the 8) | **S1** fresh-DB migration guard · **S15** artifact hygiene · **S13** CI pipeline · **S8** type · **S11** dead dep | ✅ |
+
+Every row is reproducible via a committed `scripts/audit/catN-*.{mjs}` harness against the snapshot-pinned condition of record (or the 10× fixture for Cat 3). Per-category before/after, root cause, and proof are in the change log below. Commit discipline: one labeled `audit(catN): …` commit per category, each preceded by `/correct` and pushed to the branch.
+
 ## How to reproduce any result in this file (from a clean clone)
 
 ```bash
