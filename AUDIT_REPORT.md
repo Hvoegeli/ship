@@ -99,6 +99,8 @@ Concurrency tested: 10 / 25 / 50 (0 errors all cells). **P95 scales ~linearly wi
 3. **Medium — RF2 per-request session write** adds a DB round-trip to every endpoint's latency floor (confirmed in Cat 4); compounds #1 under concurrency.
 4. **Low — fast endpoints are genuinely fast** (view_document/search/sprint_board P95 <25 ms @25). Honest scoping: Cat-3 gains come from the two list endpoints, not broad slowness.
 
+**Phase-2 result (fix + after-measurement).** Slimmed both list responses — dropped the `properties` blob + redundant flattened fields from `/api/documents`, and `content` from `/api/issues` (single-document fetches unchanged; full consumer-safety verified). Pagination was rejected (the wiki tree and Kanban board both need the full set client-side). Because the 627-doc snapshot is sub-millisecond, the before/after is run at **10× scale** (`scripts/audit/scale-10x.sh`, ~6,360 docs) — identical conditions, only the code differs; bounded endpoints act as a control group and stay flat. **`/api/documents` P95 −56% / −58% / −53%** (conc 10/25/50), **throughput +128%** — a decisive, all-load pass of the "≥20% on ≥2 endpoints" bar. **`/api/issues` P95 −11% / −9% / −19%, throughput +18%** — it clears ~−20% only at peak load because it is **processing-bound, not payload-bound** (cost is the per-row map + associations batch, not serialization; a null-omission experiment was tried and *reverted* after it measured slower). Raw: `cat3-{before,after}-10x.txt`; full write-up + honest requirement mapping in [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 4 — Database Query Efficiency

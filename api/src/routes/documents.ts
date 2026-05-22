@@ -100,9 +100,17 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     // Check if user is admin (admins can see all documents)
     const isAdmin = await isWorkspaceAdmin(userId, workspaceId);
 
+    // Cat-3 slim: the list response intentionally omits the heavy `properties`
+    // JSONB blob (and the flattened scalar copies derived from it below).
+    // Verified all list consumers — the wiki-tree path (Documents.tsx,
+    // documentTree.ts, App.tsx, useUnifiedDocuments) and CommandPalette — read
+    // only structural fields (id/parent_id/position/title/document_type/
+    // visibility/ticket_number). `properties` is fetched on demand via the
+    // single-document endpoint. Pagination was rejected: the wiki tree and
+    // cross-type command-palette search both require the full unbounded set.
     let query = `
       SELECT id, workspace_id, document_type, title, parent_id, position,
-             ticket_number, properties,
+             ticket_number,
              created_at, updated_at, created_by, visibility
       FROM documents
       WHERE workspace_id = $1
@@ -130,23 +138,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     const result = await pool.query(query, params);
 
-    // Extract properties into flat fields for backwards compatibility
-    const documents = result.rows.map(row => {
-      const props = row.properties || {};
-      return {
-        ...row,
-        // Flatten common properties for backwards compatibility
-        state: props.state,
-        priority: props.priority,
-        estimate: props.estimate,
-        assignee_id: props.assignee_id,
-        source: props.source,
-        prefix: props.prefix,
-        color: props.color,
-      };
-    });
-
-    res.json(documents);
+    // No flattening: `properties` is no longer selected (Cat-3 slim), and the
+    // previously-flattened scalar fields had no list consumer (see note above).
+    res.json(result.rows);
   } catch (err) {
     console.error('List documents error:', err);
     res.status(500).json({ error: 'Internal server error' });

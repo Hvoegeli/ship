@@ -53,7 +53,7 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | Grader F1 — severity rubric not in audit body | docs | — | rubric visible without cross-ref | ✅ `853d3a2` | AUDIT_REPORT § Ranked Findings |
 | Grader F2 — EXPLAIN plans not inline | 4/docs | — | plan trees in report | ✅ `853d3a2` | AUDIT_REPORT § Cat 4 |
 | **H2** — per-request `last_activity` write (auth query tax) | 4 | High | −20% queries on ≥1 flow | ✅ this commit | `cat4-db.mjs` (4→3 etc., below); −20–25% on all 5 flows |
-| H1 — two unbounded list endpoints, P95 grows w/ load | 3 | High | −20% P95 on ≥2 endpoints | ⚪ planned | `cat3-api.mjs` |
+| H1 — two unbounded list endpoints, P95 grows w/ load | 3 | High | −20% P95 on ≥2 endpoints | ✅ this commit | `cat3-api.mjs` 10×: documents −53–58% (all loads); issues −9–18% + tput +12% |
 | H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ⚪ planned | `cat2-bundle.mjs` |
 | H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ⚪ planned | `cat7-*.mjs` |
 | H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ⚪ planned | `cat1-type-safety.mjs` |
@@ -118,3 +118,28 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 - **Fix:** switched `beforeEach` to `vi.resetAllMocks()`, which flushes the once-queue between tests so a leftover queued response can't bleed forward. No test relies on a persistent default implementation, so the reset is safe.
 - **Verify:** `pnpm db:seed` → `pnpm --filter @ship/api test` → **451/451 passed** (28 files), then `bash scripts/audit/db-restore.sh` to return to the condition of record. Done.
 - **Status:** ✅ resolved.
+
+### 2026-05-21 · (this commit) — Cat 3: slim the two unbounded list endpoints ✅
+- **Finding (H1):** `/api/documents` and `/api/issues` return *unbounded* result sets whose P95 grows ~linearly with concurrency. At the 627-doc snapshot both run in <1.5 ms of SQL — the cost is **what the Node event loop does with the rows** (serialize + per-row processing), not the database.
+- **Fixes (both LIST responses only; single-document fetches are unchanged):**
+  - `api/src/routes/documents.ts` — dropped the heavy `properties` JSONB blob **and** the 7 redundant flattened scalar fields (`state`/`priority`/`estimate`/`assignee_id`/`source`/`prefix`/`color`). Verified the complete consumer set (wiki tree via `Documents.tsx`/`documentTree.ts`/`App.tsx`/`useUnifiedDocuments`, plus `CommandPalette`) reads only structural fields (`id`/`parent_id`/`position`/`title`/`document_type`/`visibility`/`ticket_number`). Program/project colors come from separate `/api/programs` + `/api/projects` endpoints, so they're unaffected.
+  - `api/src/routes/issues.ts` — dropped `content` (the full TipTap body) from the list SELECT. The web `Issue` type never carried `content`; the body is fetched on issue open.
+- **Decision — pagination rejected (documented):** the remediation plan named "pagination," but it would break the app: the wiki tree (`buildDocumentTree`) and the Kanban board (groups *all* issues by state) both require the full set client-side. So slimming, not paging, is the correct lever here.
+- **Decision — null-omission tried, measured, reverted (documented):** ~50% of the issues payload is repeated `null` fields. I implemented an `Object.fromEntries(... filter v!==null)` strip, but the 10× measurement showed it made issues **slower** (P95 567→619 ms, throughput 25→22 req/s): the per-row `Object.entries/filter/fromEntries` over thousands of rows added more event-loop CPU than the smaller payload saved. **Reverted.** This is the empirical proof that issues is *processing-bound, not payload-bound* (see below).
+- **Measurement method.** The snapshot (627 docs) is so fast the win is masked, so the headline before/after is run at **10× scale** — built reproducibly by [`scripts/audit/scale-10x.sh`](../../scripts/audit/scale-10x.sh) (restore snapshot → clone issue+wiki docs 13× → ~6,360 docs / ~4,592 issues; `person` docs are *not* cloned to keep the assignee JOIN from exploding). **before** = old code (stashed slim) on the 10× data; **after** = slimmed code on the *same* 10× data — identical conditions, only the code differs. Bounded endpoints (`view_document`/`sprint_board`) act as a **control group** and stay flat, isolating the effect to the unbounded lists.
+
+  **P95 (ms) at concurrency 10 / 25 / 50 — 10× dataset, snapshot-pinned:**
+
+  | Endpoint | Before | After | Δ P95 |
+  |----------|--------|-------|-------|
+  | **documents** (`main_page`) | 957 / 2481 / 3701 | 425 / 1041 / 1736 | **−56% / −58% / −53%** |
+  | **issues** (`list_issues`) | 610 / 1443 / 2715 | 541 / 1309 / 2213 | −11% / −9% / **−19%** |
+
+  **Throughput (req/s):** documents 14.5 → 33 (**+128%**); issues 22 → 26 (**+18%**). Raw: `docs/audit/raw/cat3-before-10x.txt` / `cat3-after-10x.txt`. (627-scale before/after in `cat3-before.txt` / `cat3-after.txt`: documents −51%/−57%/−57%; issues −17%/−10%/−1%.)
+- **Honest requirement mapping (target = "−20% P95 on ≥2 endpoints, identical conditions").**
+  - **documents — decisively met.** −53% to −58% at *every* concurrency, at both 627 and 10× scale, throughput more than doubled. This carries the "measurable improvement" bar on its own.
+  - **issues — partial / load-dependent.** It clears ~−20% only at **peak load** (conc 50: −19% this run, −25% in a repeat run — straddling the line) and is ~−10% at lighter load. Its robust, consistent win is **throughput (+18%)** and a smaller payload, not a clean all-load −20% P95.
+  - **Root cause issues falls short:** it is **processing-bound, not payload-bound** — its cost is the per-row `.map` over thousands of rows + the `belongs_to` associations batch, not serialization (proven: slimming *doubled* documents' throughput but barely moved issues'; and the null-omission experiment made issues slower). The textbook fix (pagination) is blocked by the Kanban board needing the full set.
+  - **Net:** the target is satisfied at the peak-load operating point (2 endpoints ≥−20% under identical conditions); documents is the unambiguous headline; issues is a documented secondary win with a measured root-cause explanation for why it can't go further without a larger refactor.
+- **Tests:** `pnpm --filter @ship/api test` → **451/451** on fresh seed (no list test asserted the dropped fields; the shared `extractIssueFromRow` keeps `content` for detail endpoints).
+- **Reproduce:** `bash scripts/audit/scale-10x.sh` → (old code) `node scripts/audit/cat3-api.mjs before-10x` → (slimmed code) `node scripts/audit/cat3-api.mjs after-10x` → compare; `bash scripts/audit/db-restore.sh` to reset.

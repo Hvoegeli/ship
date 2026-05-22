@@ -121,9 +121,13 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     // Get visibility context for filtering
     const { isAdmin } = await getVisibilityContext(userId, workspaceId);
 
+    // Cat-3 slim: the list response intentionally omits `d.content` (the full
+    // TipTap/ProseMirror body). List consumers (web/src/hooks/useIssuesQuery.ts
+    // `Issue` type + all renderers) never read `content` off a list item — the
+    // body is fetched on demand via the single-document endpoint. Dropping it
+    // here removes the dominant JSON-serialization cost from the hot list path.
     let query = `
       SELECT d.id, d.title, d.properties, d.ticket_number,
-             d.content,
              d.created_at, d.updated_at, d.created_by,
              d.started_at, d.completed_at, d.cancelled_at, d.reopened_at,
              d.converted_from_id,
