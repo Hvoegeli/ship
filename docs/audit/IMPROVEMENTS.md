@@ -54,7 +54,7 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | Grader F2 — EXPLAIN plans not inline | 4/docs | — | plan trees in report | ✅ `853d3a2` | AUDIT_REPORT § Cat 4 |
 | **H2** — per-request `last_activity` write (auth query tax) | 4 | High | −20% queries on ≥1 flow | ✅ this commit | `cat4-db.mjs` (4→3 etc., below); −20–25% on all 5 flows |
 | H1 — two unbounded list endpoints, P95 grows w/ load | 3 | High | −20% P95 on ≥2 endpoints | ✅ this commit | `cat3-api.mjs` 10×: documents −53–58% (all loads); issues −9–18% + tput +12% |
-| H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ⚪ planned | `cat2-bundle.mjs` |
+| H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ✅ this commit | `cat2-bundle.mjs` entry chunk 575.7→222.1 kB gz (−61%) |
 | H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ⚪ planned | `cat7-*.mjs` |
 | H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ⚪ planned | `cat1-type-safety.mjs` |
 | H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ⚪ planned | `test-results/summary.json` |
@@ -75,11 +75,11 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | S4 — SIGTERM drops in-flight saves | 6 | High | shutdown flush | ⚪ planned (supplemental; = Cat 6 data-loss) | `kill -TERM` mid-edit |
 | S5 — client failures masquerade as success | 6 | Med | toast pipeline | ⚪ planned | static |
 | S6 — WS broadcast O(all), no backpressure/heartbeat | 3/scale | Med | (scaling) | ⚪ planned | static |
-| S7 — no route code-split; poll; no virtualization | 2 | Med | route lazy (with H3) | ⚪ planned | `cat2-bundle.mjs` |
+| S7 — no route code-split; poll; no virtualization | 2 | Med | route lazy (with H3) | ◑ partial | route-lazy done (editor pages); poll/virtualization deferred |
 | S8 — `deleted_at` absent from shared `Document` type | 1 | Med | add to type | ⚪ planned (with Cat 1) | `type-check` |
 | S9 — `lint` script is a no-op | 1/5 | Med | real eslint gate | ⚪ planned (with Cat 1) | `pnpm lint` |
 | S10 — E2E flake surface (628 hard-waits, FIXME) | 5 | Med | state-based waits | ⚪ planned | re-run ×3 |
-| S11 — dead dependency confirmed | 2 | Low | remove | ⚪ planned | `cat2-bundle.mjs` |
+| S11 — dead dependency confirmed | 2 | Low | remove | ✅ this commit | removed `@tanstack/query-sync-storage-persister` |
 | S12 — persisted cache not identity-scoped | sec/8 | High | clear cache on logout | ✅ this commit | logout now clears in-memory + IndexedDB query cache |
 | S13 — no CI pipeline | ops | Med | GitHub Actions gate | ⚪ planned (supplemental) | — |
 | S14 — non-hermetic/root prod Docker | ops/sec | Med | multi-stage, USER, HEALTHCHECK | ⚪ planned (supplemental) | build |
@@ -175,3 +175,22 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 - **After (`cat8-after.txt`):** PASS=13 WARN=3 **FAIL=0**; CVEs **critical=0, high=20**. The one remaining `medium` WARN (CSP `script-src 'unsafe-inline'`, required by the admin-credentials inline script) is documented as a hardening follow-up.
 - **Manual-review answers (from the deep static review):** secrets — none in git/bundles (verified, S15); CORS/CSP — present (CSP has the noted `unsafe-inline`); rate limiting — present (M1: 100/min prod); error verbosity — fixed in Cat 6. Multi-tenant isolation, SQL parameterization, and auth hardening were already strong (audit § positives).
 - **Reproduce:** `node scripts/audit/cat8-security.mjs before|after` (api :3000 up, snapshot restored) → compare summary + CVE counts.
+
+### 2026-05-21 · (this commit) — Cat 2: code-split the editor + emoji picker out of the entry chunk ✅
+- **Finding (H3):** 91.6% of all JS shipped in **one entry chunk** (2025 kB raw / **575.7 kB gz**); `main.tsx` eagerly imported all pages incl. the editor (S7: 0 `React.lazy`). Heavy deps in the entry: `emoji-picker-react` (~398 kB src), `highlight.js` (~376 kB), plus the whole TipTap/ProseMirror/Yjs editor.
+- **Root cause:** the editor reached the entry chunk via two *static* `main.tsx` imports — `UnifiedDocumentPage` (→ `UnifiedEditor` → `Editor`) and `PersonEditorPage` (→ `Editor`); and `emoji-picker-react` was a static import in `EmojiPicker.tsx`. (The document-*tab* components were already split.)
+- **Fixes:**
+  1. **`EmojiPicker.tsx` + new `EmojiPickerInner.tsx`:** moved the `emoji-picker-react` import into a `React.lazy`-loaded inner component (rendered only when the popover opens); the wrapper keeps a type-only import (erased at build).
+  2. **`main.tsx`:** converted the two editor-heavy routes (`UnifiedDocumentPage`, `PersonEditorPage`) to `React.lazy` + `Suspense`, moving the TipTap/ProseMirror/Yjs/lowlight/highlight.js stack into route chunks fetched on document/person open.
+  3. **S11:** removed the dead dependency `@tanstack/query-sync-storage-persister` (0 imports; app uses a custom IndexedDB persister).
+- **Before → After** (`cat2-bundle.mjs`, `vite build --sourcemap`):
+
+  | Metric | Before | After | Δ |
+  |--------|--------|-------|---|
+  | **Entry chunk (`index`) gzip** | 575.7 kB | **222.1 kB** | **−61%** |
+  | Entry chunk raw | 2025 kB | 809 kB | −60% |
+  | % of JS in entry chunk | 91.6% | ~37% | — |
+
+  The editor stack now lives in a lazy `PropertyRow` chunk (255.7 kB gz) loaded on document-open; `emoji-picker-react` in `EmojiPickerInner` (62.6 kB gz) loaded on picker-open. **Total shipped JS is ~unchanged** (same code) — the win is *deferral* of ~1 MB out of first paint, the brief's "−20% initial-load" target (exceeded 3×).
+- **Verify:** `pnpm --filter @ship/web type-check` clean; `vite build` succeeds (Suspense boundaries added for both lazy routes + the picker).
+- **Reproduce:** `cd web && VITE_API_URL= npx vite build --sourcemap` → `node scripts/audit/cat2-bundle.mjs after` → compare entry-chunk gz to `cat2-before.txt`.

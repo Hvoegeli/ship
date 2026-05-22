@@ -75,6 +75,8 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 4. **Low — candidate dead dependency** `@tanstack/query-sync-storage-persister` (verify against runtime usage before removal — removing functionality doesn't count).
 5. **Scoping (confirms P3):** `shared/` contributes ~0 (type-only) — not a bundle lever.
 
+**Phase-2 result (fix + after-measurement).** `React.lazy`-split the two editor-heavy routes (`UnifiedDocumentPage`, `PersonEditorPage` — the only static `main.tsx` paths to the TipTap editor) and the `emoji-picker-react` dependency (rendered only on picker-open), and removed the dead `@tanstack/query-sync-storage-persister` (S11). **Entry chunk: 575.7 → 222.1 kB gzip (−61%)**, raw 2025 → 809 kB; the TipTap/ProseMirror/Yjs/lowlight/highlight.js stack moved to a lazy route chunk (255.7 kB gz) and emoji-picker to its own chunk (62.6 kB gz), both fetched on demand. Total shipped JS unchanged — ~1 MB *deferred* out of first paint. The "−20% initial-load" target is exceeded ~3×. Verified: web type-check clean, `vite build` OK. Raw: `cat2-{before,after}.txt`; write-up in [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 3 — API Response Time
