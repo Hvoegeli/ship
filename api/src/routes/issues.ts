@@ -12,9 +12,16 @@ import {
   type BelongsToEntry,
 } from '../utils/document-crud.js';
 import { broadcastToUser } from '../collaboration/index.js';
+import { validateUuidParam } from '../middleware/errorHandler.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+
+// Cat-6: reject a non-UUID `:id` path param with a clean 400 before it reaches
+// a DB query (otherwise Postgres raises 22P02 → 500 + server-log ERROR; H8).
+// Literal routes (/action-items, /by-ticket/:number, /bulk) are registered
+// without an `:id` param, so they are unaffected.
+router.param('id', validateUuidParam('id'));
 
 // BelongsTo entry schema for associations
 const belongsToEntrySchema = z.object({

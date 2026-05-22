@@ -43,6 +43,7 @@ import { InviteAcceptPage } from '@/pages/InviteAccept';
 import { SetupPage } from '@/pages/Setup';
 import { ToastProvider } from '@/components/ui/Toast';
 import { MutationErrorToast } from '@/components/MutationErrorToast';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import './index.css';
 
 /**
@@ -250,19 +251,21 @@ function AppRoutes() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{ persister: queryPersister }}
-    >
-      <ToastProvider>
-        <MutationErrorToast />
-        <BrowserRouter>
-          <ReviewQueueProvider>
-            <App />
-          </ReviewQueueProvider>
-        </BrowserRouter>
-      </ToastProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </PersistQueryClientProvider>
+    <ErrorBoundary>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister: queryPersister }}
+      >
+        <ToastProvider>
+          <MutationErrorToast />
+          <BrowserRouter>
+            <ReviewQueueProvider>
+              <App />
+            </ReviewQueueProvider>
+          </BrowserRouter>
+        </ToastProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </PersistQueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

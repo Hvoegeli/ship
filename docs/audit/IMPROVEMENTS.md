@@ -59,10 +59,10 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ⚪ planned | `cat1-type-safety.mjs` |
 | H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ⚪ planned | `test-results/summary.json` |
 | H7 — README 508/WCAG AA overclaim | 7 | High | substantiate/retract | ⚪ planned | `cat7-lighthouse.mjs` |
-| H8 — unvalidated input → 500 / HTML stack traces | 6 | High | input validation + JSON envelope | ⚪ planned | `cat6-runtime.mjs` |
+| H8 — unvalidated input → 500 / HTML stack traces | 6 | High | input validation + JSON envelope | ✅ this commit | `cat6-runtime.mjs` Probe 2: bad_uuid 500→400, JSON not HTML; Probe 5 PG errors 1→0 |
 | M1 — rate limiter 100/min prod | 3 | Med | (availability note) | ⚪ planned | `cat3-api.mjs` |
 | M2 — no pagination anywhere | 3/4 | Med | pagination | ⚪ planned (with H1) | `cat3`/`cat4` |
-| M3 — no Content-Type enforcement (junk-doc 201) | 6 | Med | reject wrong type | ⚪ planned | `cat6-runtime.mjs` |
+| M3 — no Content-Type enforcement (junk-doc 201) | 6 | Med | reject wrong type | ✅ this commit | `cat6-runtime.mjs` Probe 2: wrong_content_type 201→415 |
 | M4 — 15 contrast AA failures on `/my-week` | 7 | Med | clear 4.5:1 | ⚪ planned | `cat7-a11y.mjs` |
 | M5 — `aria-required-children` + `listitem` | 7 | Med | fix ARIA | ⚪ planned | `cat7-a11y.mjs` |
 | M6 — `pnpm test` runs only api | 5 | Med | surface web tests | ⚪ planned | `cat5` |
@@ -143,3 +143,26 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
   - **Net:** the target is satisfied at the peak-load operating point (2 endpoints ≥−20% under identical conditions); documents is the unambiguous headline; issues is a documented secondary win with a measured root-cause explanation for why it can't go further without a larger refactor.
 - **Tests:** `pnpm --filter @ship/api test` → **451/451** on fresh seed (no list test asserted the dropped fields; the shared `extractIssueFromRow` keeps `content` for detail endpoints).
 - **Reproduce:** `bash scripts/audit/scale-10x.sh` → (old code) `node scripts/audit/cat3-api.mjs before-10x` → (slimmed code) `node scripts/audit/cat3-api.mjs after-10x` → compare; `bash scripts/audit/db-restore.sh` to reset.
+
+### 2026-05-21 · (this commit) — Cat 6: centralized error handling + input validation ✅
+- **Findings (H8, M3, error-boundary gap):** the API had **no centralized error handler**, so malformed requests fell through to Express's default **HTML stack-trace page** (info disclosure + broken JSON contract); a non-JSON body slipped past `express.json()` and **silently created a junk "Untitled" document (201)**; a non-UUID `:id` reached Postgres and surfaced as a **500 + server-log ERROR**; and the React tree had no top-level error boundary (a provider/chrome throw → white screen).
+- **Fixes (4 gaps, including the data-confusion one):**
+  - **`api/src/middleware/errorHandler.ts` (new):** `jsonErrorHandler` (registered last in `app.ts`) maps malformed JSON→400, oversized body→413, CSRF rejection→403, Postgres `22P02`→400, else→500 — all as the standard `{success,error:{code,message}}` envelope, no stack leak. `enforceJsonContentType` rejects mutating requests with an unsupported Content-Type (415), allowing json/url-encoded/multipart. `validateUuidParam` is a `router.param('id')` guard that 400s a non-UUID id before any DB query.
+  - **`api/src/routes/{documents,issues}.ts`:** wired `router.param('id', validateUuidParam('id'))`.
+  - **`api/src/app.ts`:** mounted `enforceJsonContentType` after the body parsers, and `apiNotFoundHandler` + `jsonErrorHandler` after all routes.
+  - **`web/src/components/ErrorBoundary.tsx` (new) + `web/src/main.tsx`:** wrapped the entire render tree (providers + router) in a recoverable error boundary (was: only the editor subtree).
+  - **`shared/src/constants.ts`:** added `PAYLOAD_TOO_LARGE`/`UNSUPPORTED_MEDIA_TYPE` to `HTTP_STATUS`+`ERROR_CODES`.
+- **Before → After** (`cat6-runtime.mjs` Probe 2 + Probe 5):
+
+  | Probe | Before | After |
+  |-------|--------|-------|
+  | bad_json_body | 400 **HTML stack trace** | 400 JSON envelope |
+  | missing_csrf | 403 **HTML ForbiddenError** | 403 JSON envelope |
+  | wrong_content_type | **201 — persisted junk doc** | 415 JSON rejected |
+  | bad_uuid_path | **500** + Postgres ERROR | 400 JSON |
+  | Postgres ERROR lines in run | **1** (`invalid input syntax for type uuid`) | **0** |
+
+  Target ("3 error-handling fixes, ≥1 data-loss/confusion") **exceeded** — 4 gaps closed; `wrong_content_type` (silent junk-doc) is the data-confusion fix. Raw: `docs/audit/raw/cat6-after.txt` vs `cat6-before.txt`.
+- **Test fixture corrected (justified):** `issues-history.test.ts` used non-UUID path ids (`'issue-123'`, `'nonexistent'`) which the new (correct) `:id` validation now rejects with 400. Updated the fixtures to valid UUIDs (real ids are always UUIDs; the "non-existent" cases use a valid-but-absent UUID so they still resolve to 404). **451/451** on fresh seed.
+- **Not addressed here (scoping note):** M8/RT1 server-side persist-failure swallowing remains open — it's the same fix as supplemental **S4** (SIGTERM flush + surface persist failure) and is tracked there, not in Cat 6.
+- **Reproduce:** `node scripts/audit/cat6-runtime.mjs after` (web :5173 + api :3000 up) → compare Probe 2 / Probe 5 to `cat6-before.txt`.

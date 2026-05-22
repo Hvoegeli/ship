@@ -3,12 +3,17 @@ import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { isWorkspaceAdmin } from '../middleware/visibility.js';
+import { validateUuidParam } from '../middleware/errorHandler.js';
 import { handleVisibilityChange, handleDocumentConversion, invalidateDocumentCache, broadcastToUser } from '../collaboration/index.js';
 import { extractHypothesisFromContent, extractSuccessCriteriaFromContent, extractVisionFromContent, extractGoalsFromContent, checkDocumentCompleteness } from '../utils/extractHypothesis.js';
 import { loadContentFromYjsState } from '../utils/yjsConverter.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
+
+// Cat-6: reject a non-UUID `:id` path param with a clean 400 before it reaches
+// a DB query (otherwise Postgres raises 22P02 → 500 + server-log ERROR; H8).
+router.param('id', validateUuidParam('id'));
 
 // Check if user can access a document (visibility check)
 async function canAccessDocument(

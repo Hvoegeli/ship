@@ -35,6 +35,7 @@ import weeklyPlansRoutes, { weeklyRetrosRouter } from './routes/weekly-plans.js'
 import { documentCommentsRouter, commentsRouter } from './routes/comments.js';
 import { setupSwagger } from './swagger.js';
 import { initializeCAIA } from './services/caia.js';
+import { enforceJsonContentType, apiNotFoundHandler, jsonErrorHandler } from './middleware/errorHandler.js';
 
 // Validate SESSION_SECRET in production
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
@@ -143,6 +144,11 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
   app.use(express.urlencoded({ extended: true, limit: '10mb' })); // For HTML form submissions
   app.use(cookieParser(sessionSecret));
 
+  // Cat-6: reject mutating requests with an unsupported Content-Type (e.g. a
+  // text/plain body that would otherwise slip past express.json and silently
+  // create a junk document — finding M3).
+  app.use('/api/', enforceJsonContentType);
+
   // Session middleware for CSRF token storage
   app.use(session({
     secret: sessionSecret,
@@ -240,6 +246,14 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
   initializeCAIA().catch((err) => {
     console.warn('CAIA initialization failed:', err);
   });
+
+  // Cat-6: JSON 404 for unmatched /api routes (not Express's HTML default).
+  app.use('/api', apiNotFoundHandler);
+
+  // Cat-6: centralized JSON error handler — MUST be last. Maps malformed JSON,
+  // oversized bodies, CSRF rejections, and Postgres invalid-identifier errors
+  // to the standard `{ success, error }` envelope with no stack-trace leak.
+  app.use(jsonErrorHandler);
 
   return app;
 }
