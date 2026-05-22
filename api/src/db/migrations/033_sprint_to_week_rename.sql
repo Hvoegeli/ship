@@ -2,10 +2,28 @@
 -- Part of Sprint → Week rename refactor
 
 -- Rename document_type enum values
--- PostgreSQL 10+ supports ALTER TYPE ... RENAME VALUE
-ALTER TYPE document_type RENAME VALUE 'sprint_plan' TO 'weekly_plan';
-ALTER TYPE document_type RENAME VALUE 'sprint_retro' TO 'weekly_retro';
-ALTER TYPE document_type RENAME VALUE 'sprint_review' TO 'weekly_review';
+-- PostgreSQL 10+ supports ALTER TYPE ... RENAME VALUE, but there is no
+-- "RENAME VALUE IF EXISTS". On a FRESH database, schema.sql already declares the
+-- enum with the FINAL values (weekly_plan/weekly_retro/weekly_review), so a bare
+-- RENAME of the old 'sprint_*' value raises "... is not an existing enum value"
+-- and migrate.ts (which only swallows "already exists") aborts provisioning (S1).
+-- Guard each rename so it runs only when the old value still exists — a no-op on
+-- both already-migrated AND fresh databases, making the migration idempotent.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
+             WHERE t.typname = 'document_type' AND e.enumlabel = 'sprint_plan') THEN
+    ALTER TYPE document_type RENAME VALUE 'sprint_plan' TO 'weekly_plan';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
+             WHERE t.typname = 'document_type' AND e.enumlabel = 'sprint_retro') THEN
+    ALTER TYPE document_type RENAME VALUE 'sprint_retro' TO 'weekly_retro';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
+             WHERE t.typname = 'document_type' AND e.enumlabel = 'sprint_review') THEN
+    ALTER TYPE document_type RENAME VALUE 'sprint_review' TO 'weekly_review';
+  END IF;
+END$$;
 
 -- Note: We keep 'sprint' as a document_type because it represents the sprint document itself.
 -- The terminology change is "Sprint 3" → "Week of Jan 27" in UI, but the underlying

@@ -70,7 +70,7 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | M7 — unit tests truncate `ship_dev` | 5 | Med | isolated test DB | ⚪ planned | observed |
 | M8 — server persist swallows failures (RT1 residual) | 6 | Med | surface failure | ⚪ planned (with S4) | `cat6-runtime.mjs` |
 | **(new) test-isolation: leaked `mockResolvedValueOnce`** | 5 | Med | mocks reset between tests | ✅ this commit | `pnpm --filter @ship/api test` → 451/451 |
-| S1 — migration 033 fails on fresh DB | 4/build | High | guard RENAMEs | ⚪ planned (supplemental) | drop DB + `migrate.js` |
+| S1 — migration 033 fails on fresh DB | 4/build | High | guard RENAMEs | ✅ this commit | guarded `ALTER TYPE RENAME` w/ pg_enum existence check (idempotent) |
 | S2 — soft-delete leak (backlinks/dashboard/weeks) | 4/6 | High | shared active filter | ⚪ planned (supplemental) | trash issue, reload |
 | S3 — hot JSONB filters unindexed | 4 | High | expression indexes | ⚪ planned (supplemental; strengthens Cat 4 speed) | `EXPLAIN ANALYZE` |
 | S4 — SIGTERM drops in-flight saves | 6 | High | shutdown flush | ⚪ planned (supplemental; = Cat 6 data-loss) | `kill -TERM` mid-edit |
@@ -82,9 +82,9 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | S10 — E2E flake surface (628 hard-waits, FIXME) | 5 | Med | state-based waits | ⚪ planned | re-run ×3 |
 | S11 — dead dependency confirmed | 2 | Low | remove | ✅ this commit | removed `@tanstack/query-sync-storage-persister` |
 | S12 — persisted cache not identity-scoped | sec/8 | High | clear cache on logout | ✅ this commit | logout now clears in-memory + IndexedDB query cache |
-| S13 — no CI pipeline | ops | Med | GitHub Actions gate | ⚪ planned (supplemental) | — |
+| S13 — no CI pipeline | ops | Med | GitHub Actions gate | ✅ this commit | `.github/workflows/ci.yml` (install/build/type-check/lint/test/build) |
 | S14 — non-hermetic/root prod Docker | ops/sec | Med | multi-stage, USER, HEALTHCHECK | ⚪ planned (supplemental) | build |
-| S15 — committed deploy bundles (no secrets) | hygiene | Med | `git rm` + ignore | ⚪ planned (supplemental) | `git ls-files` |
+| S15 — committed deploy bundles (no secrets) | hygiene | Med | `git rm` + ignore | ✅ this commit | `git rm --cached` 4 zips + tfplan; tightened `.gitignore` globs |
 | L1–L6 — positives / scoping notes | 1–7 | Low | *not fixed by design* | ⚫ scoping | AUDIT_REPORT § Low |
 | **Cat 8 — security probe + baseline + ≥2 fixes** | 8 | — | build tool; fix ≥2 vulns | ✅ this commit | `cat8-security.mjs` built; S12 + dependency CVEs (critical 2→0, high 31→20) |
 
@@ -248,3 +248,9 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 - **H6 — `/e2e-test-runner` skill implemented:** `.claude/skills/e2e-test-runner/SKILL.md`. The repo already shipped the machinery (`e2e/progress-reporter.ts` writes `test-results/summary.json`; `scripts/watch-tests.sh` reads it) but the *skill* mandated by `CLAUDE.md` didn't exist. The skill documents the safe procedure: launch the ~880-test suite **detached**, poll the compact `summary.json` (never stream raw output → avoids the context-window explosion the docs warn about), inspect only `test-results/errors/`, and iterate with `--last-failed`.
 - **Not addressed (scoping note):** M6 (`pnpm test` runs only api) and M7 (unit tests truncate `ship_dev`) are test-infra config items, not part of the "+3 tests" target; left documented.
 - **Reproduce:** `pnpm --filter @ship/api test` → 467 passed; `/e2e-test-runner` skill is invokable.
+
+### 2026-05-21 · (this commit) — Supplementals: S1 (reproducibility), S15 (hygiene), S13 (CI) ✅
+- **S1 [High] — migration 033 fails on a fresh DB (reproducibility-critical).** `schema.sql` declares `document_type` with the FINAL enum values, so migration 033's bare `ALTER TYPE … RENAME VALUE 'sprint_plan'` raised *"not an existing enum value"* and aborted provisioning — a clean clone couldn't `pnpm dev`. **Fix:** guarded each rename in a `DO` block that checks `pg_enum` for the old label first, making the migration idempotent and fresh-DB-safe (no-op on already-migrated DBs). **Verified:** the guarded block runs `exit 0` (no-op) against the migrated snapshot; the guards skip cleanly when the old value is absent.
+- **S15 [Med] — committed deploy artifacts (no secrets, verified).** Four `deploy-api-ship-api-*.zip` bundles + `terraform/environments/shadow/tfplan` were tracked because the `.gitignore` globs (`ship-api-*.zip`, `terraform/*.tfplan`) didn't match the actual filenames (the `deploy-api-` prefix / the nested `environments/shadow/` path). **Fix:** `git rm --cached` the artifacts (local copies kept) and added matching globs (`deploy-api-*.zip`, `**/deploy-api-*.zip`, `**/tfplan`, `**/*.tfplan`). `git check-ignore` confirms they can no longer be re-committed.
+- **S13 [Med] — no CI pipeline.** Added `.github/workflows/ci.yml`: frozen-lockfile install → `build:shared` → `type-check` → `lint` (the new ESLint gate) → migrate+seed against a Postgres service → api tests → web build, on push/PR. Closes the "zero gate between dev machine and deploy" gap. *(Authored to mirror the documented local commands; not executed in this environment — it runs on the next push to GitHub Actions.)*
+- **Reproduce:** S1 — drop a DB, run `schema.sql` + `node dist/db/migrate.js`, confirm exit 0; S15 — `git ls-files | grep -E 'deploy-api.*zip|tfplan'` → empty; S13 — the workflow runs on push.

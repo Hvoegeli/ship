@@ -71,6 +71,9 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfplan
 terraform/tfplan
+# S15: the globs above missed tfplans nested under environments/ — match anywhere
+**/tfplan
+**/*.tfplan
 terraform/terraform.tfvars
 terraform/environments/*/terraform.tfvars
 terraform/environments/*/.terraform.lock.hcl
@@ -101,6 +104,11 @@ research/
 
 # Deployment artifacts
 ship-api-*.zip
+# S15: the glob above missed the `deploy-api-` prefix actually used by the deploy
+# scripts — match both shapes (and any deploy zip) so bundles never get committed.
+deploy-api-*.zip
+deploy-*.zip
+**/deploy-api-*.zip
 
 # Vendor (local SDK links)
 vendor/
