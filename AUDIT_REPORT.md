@@ -274,6 +274,8 @@ Neither tool is "lying" — axe measures the markup layer, the AT-snapshot measu
 7. **Low — two pages have non-descriptive titles (WCAG 2.4.2).** view_document and my_week render `Ship | Ship` instead of the document/week name; main_docs, issues, team_dir are correct.
 8. **Low — login page lacks `main`/`nav` landmarks.** Otherwise the cleanest page; form fields are labelled, Email is auto-focused, and Tab order is correct (`Email → Password → Sign in` — *supersedes an earlier "Password before Email" misread*). `lang=en` + 20–23 axe passes/page app-wide confirm the hygiene basics are in place.
 
+**Phase-2 result (fix + after-measurement).** Fixed all axe Critical/Serious violations. Root causes pinpointed via a targeted `@axe-core/playwright` probe: (a) the workspace/private document `<ul role="tree">` sidebars contained bare `<li>` "N more…"/empty-state children (neither `treeitem` nor `group`) → `aria-required-children` (critical) + `listitem` (serious), fixed by adding `role="treeitem"`; (b) my_week used `text-muted/50` and `text-accent` below 4.5:1, fixed (`text-muted`, solid-accent badge, bold `text-foreground` for "today"). **Aggregate Critical 2→0, Serious 17→0, color-contrast 15→0; pages with 0 Critical/Serious 3/6 → 6/6** (`cat7-a11y.mjs`). Target ("0 Critical/Serious on the top-3 pages") exceeded — clean across all pages. The auto-opening standup modal (H4) is a documented UX follow-up: escapable, *not* an axe Critical/Serious, and altering its auto-open is a product-flow change with E2E risk. Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 8 — Security Audit (added requirement)

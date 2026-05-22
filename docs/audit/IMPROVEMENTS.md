@@ -55,7 +55,7 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | **H2** — per-request `last_activity` write (auth query tax) | 4 | High | −20% queries on ≥1 flow | ✅ this commit | `cat4-db.mjs` (4→3 etc., below); −20–25% on all 5 flows |
 | H1 — two unbounded list endpoints, P95 grows w/ load | 3 | High | −20% P95 on ≥2 endpoints | ✅ this commit | `cat3-api.mjs` 10×: documents −53–58% (all loads); issues −9–18% + tput +12% |
 | H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ✅ this commit | `cat2-bundle.mjs` entry chunk 575.7→222.1 kB gz (−61%) |
-| H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ⚪ planned | `cat7-*.mjs` |
+| H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ◑ deferred | not an axe crit/serious; escapable per audit; risky product-flow change |
 | H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ⚪ planned | `cat1-type-safety.mjs` |
 | H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ⚪ planned | `test-results/summary.json` |
 | H7 — README 508/WCAG AA overclaim | 7 | High | substantiate/retract | ⚪ planned | `cat7-lighthouse.mjs` |
@@ -63,8 +63,8 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | M1 — rate limiter 100/min prod | 3 | Med | (availability note) | ⚪ planned | `cat3-api.mjs` |
 | M2 — no pagination anywhere | 3/4 | Med | pagination | ⚪ planned (with H1) | `cat3`/`cat4` |
 | M3 — no Content-Type enforcement (junk-doc 201) | 6 | Med | reject wrong type | ✅ this commit | `cat6-runtime.mjs` Probe 2: wrong_content_type 201→415 |
-| M4 — 15 contrast AA failures on `/my-week` | 7 | Med | clear 4.5:1 | ⚪ planned | `cat7-a11y.mjs` |
-| M5 — `aria-required-children` + `listitem` | 7 | Med | fix ARIA | ⚪ planned | `cat7-a11y.mjs` |
+| M4 — 15 contrast AA failures on `/my-week` | 7 | Med | clear 4.5:1 | ✅ this commit | `cat7-a11y.mjs` my_week 15→0 contrast |
+| M5 — `aria-required-children` + `listitem` | 7 | Med | fix ARIA | ✅ this commit | `cat7-a11y.mjs` main_docs/view_document 0 crit/serious |
 | M6 — `pnpm test` runs only api | 5 | Med | surface web tests | ⚪ planned | `cat5` |
 | M7 — unit tests truncate `ship_dev` | 5 | Med | isolated test DB | ⚪ planned | observed |
 | M8 — server persist swallows failures (RT1 residual) | 6 | Med | surface failure | ⚪ planned (with S4) | `cat6-runtime.mjs` |
@@ -194,3 +194,24 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
   The editor stack now lives in a lazy `PropertyRow` chunk (255.7 kB gz) loaded on document-open; `emoji-picker-react` in `EmojiPickerInner` (62.6 kB gz) loaded on picker-open. **Total shipped JS is ~unchanged** (same code) — the win is *deferral* of ~1 MB out of first paint, the brief's "−20% initial-load" target (exceeded 3×).
 - **Verify:** `pnpm --filter @ship/web type-check` clean; `vite build` succeeds (Suspense boundaries added for both lazy routes + the picker).
 - **Reproduce:** `cd web && VITE_API_URL= npx vite build --sourcemap` → `node scripts/audit/cat2-bundle.mjs after` → compare entry-chunk gz to `cat2-before.txt`.
+
+### 2026-05-21 · (this commit) — Cat 7: clear all Critical/Serious a11y violations ✅
+- **Findings (M5 critical+serious, M4 serious):** axe-core flagged **2 critical + 17 serious** WCAG 2.1 AA node instances across the top pages — `aria-required-children` (critical) + `listitem` (serious) on main_docs/view_document, and **15 `color-contrast` (serious)** on my_week.
+- **Root causes (pinpointed via a targeted `@axe-core/playwright` probe, not guesswork):**
+  - The `<ul role="tree" aria-label="Workspace documents">` sidebar contained bare `<li>` children — the **"N more…" truncation links** and the empty-state `<li>` — which are neither `treeitem` nor `group`, tripping `aria-required-children` (the tree's children must be treeitems) **and** `listitem` (an `<li>` whose parent isn't a list). Renders on every doc-mode page → flagged on main_docs + view_document.
+  - my_week used `text-muted/50` (50%-opacity muted) for 11px labels and `text-accent` for the "today" weekday/badge — both below 4.5:1.
+- **Fixes:**
+  - `web/src/pages/App.tsx`: added `role="treeitem"` to the three bare `<li>`s (workspace "more", private "more", empty-state) inside the workspace/private document trees.
+  - `web/src/pages/MyWeekPage.tsx`: `text-muted/50` → `text-muted` (passes AA; only the /50 variant failed), the "Current" badge `bg-accent/20 text-accent` → `bg-accent text-white`, and the "today" weekday label `text-accent` → bold `text-foreground` (the row's accent border/bg still signals "today").
+- **Before → After** (`cat7-a11y.mjs` Probe 1+2):
+
+  | Metric | Before | After |
+  |--------|--------|-------|
+  | Critical (aggregate nodes) | 2 | **0** |
+  | Serious (aggregate nodes) | 17 | **0** |
+  | color-contrast nodes | 15 | **0** |
+  | Pages with 0 crit/serious | 3 of 6 | **6 of 6** |
+
+  Target ("0 Critical/Serious on the top-3 pages") **exceeded** — 0 across *all* pages. Verified via the full harness + a per-node targeted probe. web type-check clean.
+- **Deferred (scoping note, H4):** the auto-opening standup/action-items modal is **not** an axe Critical/Serious violation (it's escapable and the structure underneath is sound — see Cat-6 Probe findings), and changing its auto-open behavior is a real product-flow change with E2E-selector risk. Left as a documented UX follow-up rather than bundled into this a11y-compliance pass. (H7 README 508/AA claim: the top pages are now axe-clean, but full-app 508 conformance isn't asserted — the claim should be scoped to "no axe Critical/Serious on core pages.")
+- **Reproduce:** `node scripts/audit/cat7-a11y.mjs after` (web :5173 + api :3000 up) → compare Probe 1+2 to `cat7-before.txt`.
