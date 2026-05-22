@@ -53,6 +53,8 @@ Scope B (incl tests): any 271 · as 619 · ! 329 · ts-ignore 1 — test code is
 4. **Medium — no linter at all.** No automated guard prevents new violations; configuring `@typescript-eslint` is itself a measurable, durable improvement (TS1/TS3).
 5. **Low/scoping — `shared/` is clean (0).** Do not spend Cat-1 effort there (confirms S-findings).
 
+**Phase-2 result (fix + after-measurement).** The dominant `!` class was 236 `req.userId!`/`req.workspaceId!` route assertions — replaced with **runtime-validated accessors** `getUserId(req)`/`getWorkspaceId(req)` (throw on a non-authenticated request, return `string`), migrated across 21 route files. Added an **ESLint gate** (`eslint` + `typescript-eslint` flat config: `no-explicit-any`, `no-non-null-assertion`, `consistent-type-assertions` as warnings) — turning the no-op `pnpm lint` (S9) into real coverage (199 warnings, 0 errors) that stops new violations. Added `deleted_at` to the shared `Document` type (S8). **Total violations 852 → 619 (−27.3%); non-null `!` 325 → 89** (`cat1-type-safety.mjs`), exceeding the −25% target. 451/451 api tests; type-check clean. Write-up: [`docs/audit/IMPROVEMENTS.md`](docs/audit/IMPROVEMENTS.md).
+
 ---
 
 ## Category 2 — Bundle Size

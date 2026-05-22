@@ -56,7 +56,7 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | H1 — two unbounded list endpoints, P95 grows w/ load | 3 | High | −20% P95 on ≥2 endpoints | ✅ this commit | `cat3-api.mjs` 10×: documents −53–58% (all loads); issues −9–18% + tput +12% |
 | H3 — 91.6% of JS in one entry chunk | 2 | High | −20% initial bundle | ✅ this commit | `cat2-bundle.mjs` entry chunk 575.7→222.1 kB gz (−61%) |
 | H4 — auto-modal occludes authed pages (escapable) | 7 | High | 0 Critical/Serious top-3 | ◑ deferred | not an axe crit/serious; escapable per audit; risky product-flow change |
-| H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ⚪ planned | `cat1-type-safety.mjs` |
+| H5 — 852 type escape hatches, no linter | 1 | High | −25% violations | ✅ this commit | `cat1-type-safety.mjs` 852→619 (−27.3%) + eslint gate |
 | H6 — `/e2e-test-runner` skill missing | 5 | High | implement runner | ⚪ planned | `test-results/summary.json` |
 | H7 — README 508/WCAG AA overclaim | 7 | High | substantiate/retract | ⚪ planned | `cat7-lighthouse.mjs` |
 | H8 — unvalidated input → 500 / HTML stack traces | 6 | High | input validation + JSON envelope | ✅ this commit | `cat6-runtime.mjs` Probe 2: bad_uuid 500→400, JSON not HTML; Probe 5 PG errors 1→0 |
@@ -76,8 +76,8 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
 | S5 — client failures masquerade as success | 6 | Med | toast pipeline | ⚪ planned | static |
 | S6 — WS broadcast O(all), no backpressure/heartbeat | 3/scale | Med | (scaling) | ⚪ planned | static |
 | S7 — no route code-split; poll; no virtualization | 2 | Med | route lazy (with H3) | ◑ partial | route-lazy done (editor pages); poll/virtualization deferred |
-| S8 — `deleted_at` absent from shared `Document` type | 1 | Med | add to type | ⚪ planned (with Cat 1) | `type-check` |
-| S9 — `lint` script is a no-op | 1/5 | Med | real eslint gate | ⚪ planned (with Cat 1) | `pnpm lint` |
+| S8 — `deleted_at` absent from shared `Document` type | 1 | Med | add to type | ✅ this commit | added `deleted_at?: Date \| null` |
+| S9 — `lint` script is a no-op | 1/5 | Med | real eslint gate | ✅ this commit | eslint + typescript-eslint flat config; `pnpm lint` runs (199 warnings) |
 | S10 — E2E flake surface (628 hard-waits, FIXME) | 5 | Med | state-based waits | ⚪ planned | re-run ×3 |
 | S11 — dead dependency confirmed | 2 | Low | remove | ✅ this commit | removed `@tanstack/query-sync-storage-persister` |
 | S12 — persisted cache not identity-scoped | sec/8 | High | clear cache on logout | ✅ this commit | logout now clears in-memory + IndexedDB query cache |
@@ -215,3 +215,22 @@ Status: ✅ resolved (with before/after proof) · 🔵 in progress · ⚪ planne
   Target ("0 Critical/Serious on the top-3 pages") **exceeded** — 0 across *all* pages. Verified via the full harness + a per-node targeted probe. web type-check clean.
 - **Deferred (scoping note, H4):** the auto-opening standup/action-items modal is **not** an axe Critical/Serious violation (it's escapable and the structure underneath is sound — see Cat-6 Probe findings), and changing its auto-open behavior is a real product-flow change with E2E-selector risk. Left as a documented UX follow-up rather than bundled into this a11y-compliance pass. (H7 README 508/AA claim: the top pages are now axe-clean, but full-app 508 conformance isn't asserted — the claim should be scoped to "no axe Critical/Serious on core pages.")
 - **Reproduce:** `node scripts/audit/cat7-a11y.mjs after` (web :5173 + api :3000 up) → compare Probe 1+2 to `cat7-before.txt`.
+
+### 2026-05-21 · (this commit) — Cat 1: validated auth accessors (−27% type escape hatches) + ESLint gate ✅
+- **Finding (H5):** 852 type-safety escape hatches in non-test `src` (`any` 94, `as` 433, `!` 325) and **no linter** to stop new ones (S9 — `pnpm lint` was a silent no-op).
+- **Root cause of the `!` bulk:** the Express `Request` augmentation types `userId`/`workspaceId` as optional (undefined before auth), so **236 route call-sites** asserted presence with `req.userId!` / `req.workspaceId!` — unchecked non-null assertions that would silently pass `undefined` into a query if a handler were ever mounted without auth.
+- **Fixes:**
+  1. **Meaningful narrowing (not a rebrand):** added `getUserId(req)` / `getWorkspaceId(req)` to `api/src/middleware/auth.ts` — **runtime-validated** accessors that *throw* a clear error on a non-authenticated request and return `string` (no `!`). Migrated all 236 sites across 21 route files (mechanical 1:1, type-check verified). The invariant now lives in one validated place instead of 236 unchecked assertions.
+  2. **ESLint gate (S9 / the durable win):** installed `eslint` + `typescript-eslint`, added a flat `eslint.config.mjs` with `no-explicit-any`, `no-non-null-assertion`, `consistent-type-assertions` as **warnings** (so it runs against the backlog without failing), and pointed the root `lint` script at it. `pnpm lint` now reports **199 warnings (0 errors)** — real static-analysis coverage where there was none.
+  3. **S8:** added `deleted_at?: Date | null` to the shared `Document` type (the column exists and drives trash/retention).
+- **Before → After** (`cat1-type-safety.mjs`, Scope A non-test src):
+
+  | Metric | Before | After |
+  |--------|--------|-------|
+  | **Total violations** | 852 | **619** |
+  | non-null `!` | 325 | **89** |
+  | reduction | — | **−233 (−27.3%)** |
+
+  Target (−25% = 213) **exceeded**. (`any`/`as` are ~flat — the win is the validated-accessor narrowing of `!`, plus the gate stopping future growth. `any`+2 is from Cat-6/8 new files, e.g. `err: any` in the error handler.)
+- **Test fixtures updated (justified):** 4 test files `vi.mock('../middleware/auth.js')` returning only `authMiddleware`; the mock must mirror the real module's exports, so added `getUserId`/`getWorkspaceId` to each mock (they read the same `req.userId`/`req.workspaceId` the mock sets). **451/451** on fresh seed; type-check clean.
+- **Reproduce:** `node scripts/audit/cat1-type-safety.mjs after` → compare to `cat1-before.txt`; `pnpm lint` to see the gate.

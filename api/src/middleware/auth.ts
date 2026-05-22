@@ -16,6 +16,27 @@ declare global {
   }
 }
 
+// Cat-1 (type safety): the Express Request augmentation declares `userId` and
+// `workspaceId` as optional (they are undefined before authMiddleware runs).
+// Route handlers previously asserted presence with `req.userId!` / `req.workspaceId!`
+// at ~236 call sites — unchecked non-null assertions that silently pass `undefined`
+// through if a handler is ever mounted without auth. These accessors centralize the
+// invariant into ONE runtime-validated narrowing: TypeScript gets a `string` (no `!`),
+// and a misuse throws a clear error instead of leaking `undefined` into a query.
+export function getUserId(req: Request): string {
+  if (req.userId === undefined) {
+    throw new Error('getUserId() called on a request without authentication (mount authMiddleware first)');
+  }
+  return req.userId;
+}
+
+export function getWorkspaceId(req: Request): string {
+  if (req.workspaceId === undefined) {
+    throw new Error('getWorkspaceId() called on a request without authentication (mount authMiddleware first)');
+  }
+  return req.workspaceId;
+}
+
 // Hash a token for comparison
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');

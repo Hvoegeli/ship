@@ -247,6 +247,10 @@ export interface Document {
   properties: Record<string, unknown>;
   ticket_number?: number | null;
   archived_at?: Date | null;
+  // S8: the `deleted_at` column exists (schema.sql) and drives trash/retention,
+  // but was absent from this shared type — typed consumers couldn't reason about
+  // soft-deleted state. Added so trash-aware reads/filters are type-checked.
+  deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
   created_by?: string | null;
